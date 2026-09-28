@@ -1,0 +1,17 @@
+=== claude scout, opt-in (harness=claude) ===
+config:
+  | claude /poteto-mode
+fm-spawn exit=0
+launch prompt tail:
+ or other authority absent from the brief.' '/poteto-mode '': Firstmate operational input waiting: read '\''/tmp/tmp.GBFf3L6BCW/875928270/home/state/operational-inbox/1790609692-feb7745b551a82d6.msg'\'' and handle its contents as Firstmate operational input.'
+
+
+=== codex scout, opt-in (harness=codex) ===
+config:
+  | codex $poteto-mode
+fm-spawn exit=0
+launch prompt tail:
+"$('/home/david/.no-mistakes/worktrees/12215e17a012/01M3M9Y7PTQ445YC290R8ME9D3/bin/fm-operational-input.sh' encode launch-brief < '/tmp/tmp.GBFf3L6BCW/717116220/home/data/wlc-15607/launch-brief.md')"
+7116220/home/state/wlc-15607.turn-ended'\"]" '$poteto-mode '"$('/home/david/.no-mistakes/worktrees/12215e17a012/01M3M9Y7PTQ445YC290R8ME9D3/bin/fm-operational-input.sh' encode launch-brief < '/tmp/tmp.GBFf3L6BCW/717116220/home/data/wlc-15607/launch-brief.md')"
+
+

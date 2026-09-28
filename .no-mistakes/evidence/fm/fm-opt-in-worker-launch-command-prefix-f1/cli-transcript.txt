@@ -1,0 +1,90 @@
+=== claude, opt-in /poteto-mode (harness=claude) ===
+config:
+  | claude /poteto-mode
+fm-spawn exit=0
+launch prompt tail:
+or other authority absent from the brief.' '/poteto-mode '': Firstmate operational input waiting: read '\''/tmp/tmp.zykV7RQIG3/1638314051/home/state/operational-inbox/1790609669-ea1cc2712d6f89be.msg'\'' and handle its contents as Firstmate operational input.'
+
+
+=== codex, opt-in $poteto-mode (harness=codex) ===
+config:
+  | codex $poteto-mode
+fm-spawn exit=0
+launch prompt tail:
+"$('/home/david/.no-mistakes/worktrees/12215e17a012/01M3M9Y7PTQ445YC290R8ME9D3/bin/fm-operational-input.sh' encode launch-brief < '/tmp/tmp.zykV7RQIG3/299012406/home/data/wlc-3088/launch-brief.md')"
+299012406/home/state/wlc-3088.turn-ended'\"]" '$poteto-mode '"$('/home/david/.no-mistakes/worktrees/12215e17a012/01M3M9Y7PTQ445YC290R8ME9D3/bin/fm-operational-input.sh' encode launch-brief < '/tmp/tmp.zykV7RQIG3/299012406/home/data/wlc-3088/launch-brief.md')"
+
+
+=== claude, no config (baseline) (harness=claude) ===
+config: <absent>
+fm-spawn exit=0
+launch prompt tail:
+ity-sensitive, or other authority absent from the brief.' ': Firstmate operational input waiting: read '\''/tmp/tmp.zykV7RQIG3/2897219204/home/state/operational-inbox/1790609675-50a523cfbc5deb77.msg'\'' and handle its contents as Firstmate operational input.'
+
+
+=== codex, no config (baseline) (harness=codex) ===
+config: <absent>
+fm-spawn exit=0
+launch prompt tail:
+"$('/home/david/.no-mistakes/worktrees/12215e17a012/01M3M9Y7PTQ445YC290R8ME9D3/bin/fm-operational-input.sh' encode launch-brief < '/tmp/tmp.zykV7RQIG3/3085225469/home/data/wlc-29722/launch-brief.md')"
+zykV7RQIG3/3085225469/home/state/wlc-29722.turn-ended'\"]" "$('/home/david/.no-mistakes/worktrees/12215e17a012/01M3M9Y7PTQ445YC290R8ME9D3/bin/fm-operational-input.sh' encode launch-brief < '/tmp/tmp.zykV7RQIG3/3085225469/home/data/wlc-29722/launch-brief.md')"
+
+
+=== codex worker, only claude listed (harness=codex) ===
+config:
+  | claude /poteto-mode
+fm-spawn exit=0
+launch prompt tail:
+"$('/home/david/.no-mistakes/worktrees/12215e17a012/01M3M9Y7PTQ445YC290R8ME9D3/bin/fm-operational-input.sh' encode launch-brief < '/tmp/tmp.zykV7RQIG3/1678329301/home/data/wlc-32733/launch-brief.md')"
+zykV7RQIG3/1678329301/home/state/wlc-32733.turn-ended'\"]" "$('/home/david/.no-mistakes/worktrees/12215e17a012/01M3M9Y7PTQ445YC290R8ME9D3/bin/fm-operational-input.sh' encode launch-brief < '/tmp/tmp.zykV7RQIG3/1678329301/home/data/wlc-32733/launch-brief.md')"
+
+
+=== claude, blank/whitespace/indented comments skipped (harness=claude) ===
+config:
+  | 
+  |    
+  | 	
+  |   # indented comment
+  | # comment
+  | claude /poteto-mode
+fm-spawn exit=0
+launch prompt tail:
+, or other authority absent from the brief.' '/poteto-mode '': Firstmate operational input waiting: read '\''/tmp/tmp.zykV7RQIG3/86002418/home/state/operational-inbox/1790609683-c45dd5fc7a6241f5.msg'\'' and handle its contents as Firstmate operational input.'
+
+
+=== ADVERSARIAL wrong sigil for codex (harness=codex) ===
+config:
+  | codex /poteto-mode
+fm-spawn exit=1
+error: config/worker-launch-command line 1: command '/poteto-mode' for codex must be one token starting with '$' followed by letters, digits, ':', '.', '_' or '-'; supported harnesses: claude, grok, pi, pi-signed (a /command) and codex (a $command)
+no task record/metadata created for wlc-23052: absent
+
+=== ADVERSARIAL unsupported harness (harness=claude) ===
+config:
+  | opencode /poteto-mode
+fm-spawn exit=1
+error: config/worker-launch-command line 1: harness 'opencode' is not supported: its launch prompt is not verified to run a leading command; supported harnesses: claude, grok, pi, pi-signed (a /command) and codex (a $command)
+no task record/metadata created for wlc-24600: absent
+
+=== ADVERSARIAL duplicate (harness=claude) ===
+config:
+  | claude /a
+  | claude /b
+fm-spawn exit=1
+error: config/worker-launch-command line 2: duplicate entry for claude; supported harnesses: claude, grok, pi, pi-signed (a /command) and codex (a $command)
+no task record/metadata created for wlc-12717: absent
+
+=== ADVERSARIAL shell injection (harness=claude) ===
+config:
+  | claude /x;touch${IFS}pwned
+fm-spawn exit=1
+error: config/worker-launch-command line 1: command '/x;touch${IFS}pwned' for claude must be one token starting with '/' followed by letters, digits, ':', '.', '_' or '-'; supported harnesses: claude, grok, pi, pi-signed (a /command) and codex (a $command)
+no task record/metadata created for wlc-7096: absent
+
+=== ADVERSARIAL extra token (harness=claude) ===
+config:
+  | claude /poteto-mode extra
+fm-spawn exit=1
+error: config/worker-launch-command line 1: expected '<harness> <command>' with exactly one command token; supported harnesses: claude, grok, pi, pi-signed (a /command) and codex (a $command)
+no task record/metadata created for wlc-19856: absent
+

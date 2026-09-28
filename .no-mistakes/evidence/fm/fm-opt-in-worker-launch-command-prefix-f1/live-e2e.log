@@ -1,0 +1,6 @@
+ok - claude 2.1.283 (Claude Code) runs the leading /fmlc-probe and then follows the brief
+ok - codex codex-cli 0.157.0 runs the leading $fmlc-probe and then follows the brief
+ok - grok grok 1.0.41 (4220f3b224a6) [stable] runs the leading /fmlc-probe and then follows the brief
+ok - pi 0.87.1 runs the leading /skill:fmlc-probe and then follows the brief
+# pi-signed is not installed; not checked
+exit=0
