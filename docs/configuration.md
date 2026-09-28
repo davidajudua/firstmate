@@ -931,7 +931,7 @@ Only name a Claude command that resolves in every project this home launches Cla
 
 A ship or scout launch, including a relaunch, on a listed harness carries the command.
 An absent file, a harness with no entry, a secondmate launch, and a raw launch command leave the launch exactly as it was.
-Blank lines and lines starting with `#` are ignored.
+Blank or whitespace-only lines and lines whose first non-blank character is `#` are ignored.
 A line naming an unknown or unsupported harness, a command that is not one token with the harness's leading character, a second entry for one harness, or an unreadable file refuses every spawn from that home before any endpoint, worktree, or task record exists.
 
 Calm presentation recognizes a launch prompt as Firstmate input only when the prompt starts with it, so a worker's first prompt shows unhidden once a command leads it.
