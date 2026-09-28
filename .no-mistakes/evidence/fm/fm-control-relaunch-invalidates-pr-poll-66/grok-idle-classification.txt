@@ -1,0 +1,9 @@
+# live grok 1.0.41 --always-approve idle pane, isolated tmux socket
+base d5c2507 (before): tmux(cursor-anchored)=unknown  cursorless(herdr-style)=unknown
+target bbfd1d4 (after): tmux(cursor-anchored)=empty  cursorless(herdr-style)=empty
+# after typing 'deploy the fix' (no Enter)
+target bbfd1d4 (after): tmux(cursor-anchored)=pending  cursorless(herdr-style)=pending
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯ deploy the fix                                                                                                                                                                                 │
+  ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Grok 4.7 Fast (low) · always-approve ─╯
+  Enter:send  │  Alt+Enter:newline  │  Shift+Tab:mode  │  Ctrl+x:shortcuts

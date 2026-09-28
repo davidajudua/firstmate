@@ -1,0 +1,20 @@
+# HEAD tests with base d5c2507 bin/fm-spawn.sh (before fix)
+not ok - relaunch (trace off) left the armed PR merge poll unauthenticated, so the watcher rejects it
+window=fmses:fm-rl66
+endpoint_task_id=rl66
+worktree=/tmp/fm-control-relaunch.T5XkLO/armed-poll-28042/wt
+project=/tmp/fm-control-relaunch.T5XkLO/armed-poll-28042/proj
+harness=claude
+kind=ship
+mode=no-mistakes
+yolo=off
+branch=fm/rl66
+tasktmp=/tmp/fm-rl66
+model=default
+effort=default
+busy_gen=g1790622743.3716790.12586
+spawn_gen=s1790622743.3716225.10072
+pr=https://github.com/example/repo/pull/66
+pr_head=0123456789abcdef0123456789abcdef01234567
+control_relaunch_tx=3715793.20260928T191223Z.9130
+rc=1

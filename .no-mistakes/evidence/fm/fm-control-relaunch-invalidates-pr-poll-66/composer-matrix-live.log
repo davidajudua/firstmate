@@ -1,0 +1,46 @@
+# claude pane tail at failure:
+#    Accessing workspace:
+#    /home/david/.no-mistakes/worktrees/12215e17a012/01M3MPFM83QY59TM1132FH5TV6
+#    Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what's in this folder first.
+#    Claude Code'll be able to read, edit, and execute files here.
+#    Security guide
+#    ❯ No, exit
+#      Yes, I trust this folder
+#    Enter to confirm · Esc to cancel
+not ok - claude (2.1.284 (Claude Code)): idle composer never classified empty (last verdict: pending)
+# codex pane tail at failure:
+#     Folder access
+#     /home/david/.no-mistakes/worktrees/12215e17a012/01M3MPFM83QY59TM1132FH5TV6
+#     Trust this folder? Codex can read, edit, and run files here, subject to your permission settings. Folder settings can run code automatically, even without a model request. Continue only if you trust these files. Your
+#     trust decision will be saved.
+#   › 1. Trust and continue
+#     2. Back to Agent Command Center
+#     enter continue · esc back
+not ok - codex (codex-cli 0.157.0): idle composer never classified empty (last verdict: unknown)
+# harness absent, not verified here: opencode
+# pi pane tail at failure:
+#    This allows pi to load .pi settings and resources, install missing project packages, and execute project extensions.
+#    → Trust
+#      Trust parent folder (/home/david/.no-mistakes/worktrees/12215e17a012)
+#      Trust (this session only)
+#      Do not trust
+#      Do not trust (this session only)
+#    ↑↓ navigate  enter select  escape/ctrl+c cancel
+#   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+not ok - pi (0.87.1): idle composer never classified empty (last verdict: unknown)
+# grok pane tail at failure:
+#                                                                                                          ⠐⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+#                                                                                           Do you trust the contents of this directory?
+#                                                                            /home/david/.no-mistakes/worktrees/12215e17a012/01M3MPFM83QY59TM1132FH5TV6
+#                                                                                     Grok Build may run or modify contents in this directory,
+#                                                                                                      posing security risks.
+#                                                                                                  Yes, proceed                 y
+#                                                                                                  No, quit                     n
+#                                                                                                                                                                                                  Grok Build  1.0.41 [stable]
+not ok - grok (grok 1.0.41 (4220f3b224a6) [stable]): idle composer never classified empty (last verdict: unknown)
+# harness absent, not verified here: kimi
+# harness absent, not verified here: muse
+ok - strict posture live: a blank shell row classifies unknown and injection defers
+# harness absent, not verified here: zellij (false-positive regression not exercised)
+not ok - live composer-matrix guard observed failures above
+rc=1

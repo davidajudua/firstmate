@@ -1,0 +1,12 @@
+# herdr herdr 0.7.4, session fm-lab-grok-middot-3701997-9332, grok grok 1.0.41 (4220f3b224a6) [stable]
+  retain coding data, e.g., prompts, traces, &
+  metrics, for training and debugging purposes.
+  Change anytime via settings.
+  Read Terms and Privacy Policy.
+  ╭───────────────────────────────────────────────╮
+  │ ❯                                             │
+  ╰──────── Grok 4.7 Fast (low) · always-approve ─╯
+                        Grok Build  1.0.41 [stable]
+base d5c2507 (before): fm_backend_herdr_composer_state=unknown
+target bbfd1d4 (after): fm_backend_herdr_composer_state=empty
+teardown rc=0
