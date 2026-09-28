@@ -1818,7 +1818,7 @@ test_non_claude_harness_ignores_claude_permission_mode() {
 # emitted launch with an argv-capture harness, so it checks what the worker
 # would actually receive.
 write_worker_launch_commands() {  # <home>
-  printf '%s\n' '# start every worker in poteto-mode' '' \
+  printf '%s\n' '# start every worker in poteto-mode' '' $'  \t' '  # indented note' \
     'claude /poteto-mode' "codex \$poteto-mode" 'grok /poteto-mode' \
     'pi /skill:poteto-mode' 'pi-signed /skill:poteto-mode' \
     > "$1/config/worker-launch-command"

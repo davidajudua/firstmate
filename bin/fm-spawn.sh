@@ -596,8 +596,8 @@ if [ "$WORKER_LAUNCH_COMMAND_PRESENT" = 1 ]; then
   wlc_line_no=0
   while IFS= read -r wlc_line || [ -n "$wlc_line" ]; do
     wlc_line_no=$((wlc_line_no + 1))
-    case "$wlc_line" in '' | '#'*) continue ;; esac
     read -r wlc_harness wlc_command wlc_extra <<<"$wlc_line"
+    case "$wlc_harness" in '' | '#'*) continue ;; esac
     wlc_error=
     case "$wlc_harness" in
     claude | grok | pi | pi-signed) wlc_sigil=/ ;;
