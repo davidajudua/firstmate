@@ -589,8 +589,14 @@ if ! WORKER_LAUNCH_COMMAND_PRESENT=$(fm_config_source_present "$CONFIG/worker-la
 fi
 WORKER_LAUNCH_COMMANDS=
 if [ "$WORKER_LAUNCH_COMMAND_PRESENT" = 1 ]; then
-  if [ ! -f "$CONFIG/worker-launch-command" ] || [ ! -r "$CONFIG/worker-launch-command" ]; then
+  if [ ! -f "$CONFIG/worker-launch-command" ]; then
     echo "error: config/worker-launch-command must be a readable regular file" >&2
+    exit 1
+  fi
+  # Read the whole file with a checked command so a read failure refuses
+  # instead of ending the parse early like end of file would.
+  if ! wlc_content=$(cat "$CONFIG/worker-launch-command"); then
+    echo "error: config/worker-launch-command could not be read" >&2
     exit 1
   fi
   wlc_line_no=0
@@ -622,7 +628,7 @@ if [ "$WORKER_LAUNCH_COMMAND_PRESENT" = 1 ]; then
       exit 1
     fi
     WORKER_LAUNCH_COMMANDS="$WORKER_LAUNCH_COMMANDS$wlc_harness $wlc_command"$'\n'
-  done <"$CONFIG/worker-launch-command"
+  done <<<"$wlc_content"
 fi
 # config/lavish-axi-host is the primary-owned per-machine address for the
 # shared Lavish server. Read it once per launch and refuse malformed values so

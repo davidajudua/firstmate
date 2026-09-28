@@ -1965,6 +1965,29 @@ EOF
   pass "a malformed config/worker-launch-command refuses before any endpoint or metadata"
 }
 
+test_worker_launch_command_unreadable_refuses_before_endpoint_or_metadata() {
+  local rec id out status
+  # A mode-000 file is detected but cannot be read, so the read itself fails.
+  # Root reads it anyway, which would make the refusal vacuous.
+  if [ "$(id -u)" = 0 ]; then
+    pass "an unreadable config/worker-launch-command refuses before any endpoint or metadata (skipped as root)"
+    return 0
+  fi
+  id="launchcmd-unreadable-z29"
+  rec=$(make_spawn_case "launchcmd-unreadable" claude "$id")
+  read_case_record "$rec"
+  printf '%s\n' 'claude /poteto-mode' > "$HOME_DIR/config/worker-launch-command"
+  chmod 000 "$HOME_DIR/config/worker-launch-command"
+  out=$(run_ship_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$LAUNCH_LOG" "$id" "$PROJ_DIR")
+  status=$?
+  chmod 600 "$HOME_DIR/config/worker-launch-command"
+  expect_code 1 "$status" "an unreadable worker-launch-command must refuse the spawn"
+  assert_contains "$out" "config/worker-launch-command could not be read" "the refusal must name the read failure"
+  [ ! -s "$LAUNCH_LOG" ] || fail "an unreadable worker-launch-command launched: $(cat "$LAUNCH_LOG")"
+  assert_absent "$HOME_DIR/state/$id.meta" "an unreadable worker-launch-command wrote metadata"
+  pass "an unreadable config/worker-launch-command refuses before any endpoint or metadata"
+}
+
 test_worker_launch_delivers_role_scope
 test_no_profile_keeps_claude_profile_defaults
 test_claude_launch_brief_publishes_record_doorbell
@@ -2021,6 +2044,7 @@ test_worker_launch_command_leaves_unlisted_harness_unchanged
 test_worker_launch_command_absent_leaves_launch_unchanged
 test_worker_launch_command_skips_secondmate_launch
 test_worker_launch_command_malformed_refuses_before_endpoint_or_metadata
+test_worker_launch_command_unreadable_refuses_before_endpoint_or_metadata
 test_non_claude_harness_ignores_claude_permission_mode
 test_non_claude_harness_ignores_config_dir
 test_claude_task_launch_carries_control_channel_authority
