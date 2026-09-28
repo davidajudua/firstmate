@@ -27,6 +27,8 @@ set -u
 . "$ROOT/bin/fm-trace-context-lib.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-tasks-axi-lib.sh"
+# shellcheck source=/dev/null
+. "$ROOT/bin/fm-pr-lib.sh"
 
 CONTROL="$ROOT/bin/fm-control.sh"
 SPAWN="$ROOT/bin/fm-spawn.sh"
@@ -488,6 +490,28 @@ test_relaunch_preserves_durable_task_metadata() {
   [ "$(meta_field "$dir" rl19 decisions_reviewed)" = 1 ] \
     || fail "the task decision state must survive relaunch"
   pass "fm-control relaunch: durable task metadata survives replacement launch publication"
+}
+
+test_relaunch_keeps_an_armed_pr_poll_authenticated() {
+  local dir out rc url=https://github.com/example/repo/pull/66
+  dir=$(new_case armed-poll rl66)
+  add_ship_task "$dir" rl66 claude
+  printf 'pr=%s\npr_head=%s\n' "$url" 0123456789abcdef0123456789abcdef01234567 \
+    >> "$dir/home/state/rl66.meta"
+  chmod 600 "$dir/home/state/rl66.meta"
+  fm_pr_poll_prepare "$dir/home/state" rl66 github "$url" github.com example/repo 66 "$ROOT/bin/fm-pr-poll.sh" \
+    || fail "could not prepare the PR merge poll"
+  fm_pr_poll_publish_prepared || fail "could not publish the PR merge poll"
+  fm_pr_poll_artifacts_valid "$dir/home/state" rl66 "$ROOT/bin/fm-pr-poll.sh" \
+    || fail "the armed PR merge poll was not authenticated before relaunch"
+
+  out=$(run_control "$dir" rl66 relaunch --note "continuing after the PR opened"); rc=$?
+  expect_code 0 "$rc" "relaunch of a task with an armed PR poll should succeed"$'\n'"$out"
+  [ -n "$(meta_field "$dir" rl66 control_relaunch_tx)" ] \
+    || fail "the relaunch did not record its transaction, so this case proves nothing"
+  fm_pr_poll_artifacts_valid "$dir/home/state" rl66 "$ROOT/bin/fm-pr-poll.sh" \
+    || fail "relaunch left the armed PR merge poll unauthenticated, so the watcher rejects it"$'\n'"$(cat "$dir/home/state/rl66.meta")"
+  pass "fm-control relaunch: an armed PR merge poll stays authenticated for the watcher"
 }
 
 test_relaunch_serializes_concurrent_durable_metadata_publication() {
@@ -2391,6 +2415,7 @@ test_relaunch_refuses_before_exit_when_the_composer_holds_pending_text
 test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven
 test_relaunch_from_linked_home_preserves_recorded_worktree
 test_relaunch_preserves_durable_task_metadata
+test_relaunch_keeps_an_armed_pr_poll_authenticated
 test_relaunch_serializes_concurrent_durable_metadata_publication
 test_disabled_relaunch_clears_prior_trace_context
 test_relaunch_appends_the_progress_note_to_the_instructions
