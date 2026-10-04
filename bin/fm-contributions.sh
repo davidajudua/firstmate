@@ -18,7 +18,8 @@
 #
 # This script owns fm-contributions.v1: one atomic file per durable task with
 # task and records[]. Each record contains url, kind, checked_at, error,
-# observation, verdict, seen event tokens, pending events, and notified tokens.
+# failed_at, observation, verdict, seen event tokens, pending events, and
+# notified tokens.
 # observation is one coherent forge read (a PR head is rechecked after fetching
 # checks/reviews). Checks are normalized by name, id, started_at, status and
 # conclusion; projection picks the newest attempt per distinct name. The last
@@ -32,20 +33,22 @@
 # an eligible merge remains a captain call, never an automatic forge action.
 #
 # poll consumes fm-fleet-snapshot.sh --contribution-input, a local-only read,
-# and spends at most FM_CONTRIBUTIONS_BUDGET seconds on forge reads (default 20,
-# 1..25). A configured value rides the generated check shim into watcher runs
-# and is cut down to the watcher's own per-check bound (FM_CHECK_TIMEOUT,
-# default 30, read from the poll's environment because the watcher runs it as
-# a direct child) with a three-second margin. Every read is capped at five
-# seconds, and a read killed at that bound or at the deadline is budget
-# refusal, never a forge failure. A pull observation has three
-# dependent waves: core, six independent reads, then the closing head read;
-# an issue has two waves. Before starting a URL, poll reserves the smaller of
-# the effective budget and 15 seconds for those waves. URLs needing forge
-# reads are sorted by URL and rotated by the current five-minute epoch bucket
-# modulo their count, without stored scheduling state or freshness-based
-# reordering. Terminal URLs settle separately before the forge budget starts
-# and consume no rotation slots.
+# and spends at most FM_CONTRIBUTIONS_BUDGET seconds on forge reads, else the
+# home's config/contributions-budget (one integer line), else 20; either value
+# must be 1..25. The config file is read on every run, so changing it needs no
+# re-arm. An environment value set at arm time rides the generated check shim
+# into watcher runs. The effective budget is cut down to the watcher's own
+# per-check bound (FM_CHECK_TIMEOUT, default 30, read from the poll's
+# environment because the watcher runs it as a direct child) with a
+# three-second margin. Every read is capped at five seconds, and a read killed
+# at that bound or at the deadline is budget refusal, never a forge failure.
+# A pull observation has three dependent waves: core, six independent reads,
+# then the closing head read; an issue has two waves. Before starting a URL,
+# poll reserves the smaller of the effective budget and 15 seconds for those
+# waves. URLs needing forge reads are sorted by URL and rotated by the current
+# five-minute epoch bucket modulo their count, without stored scheduling state
+# or freshness-based reordering. Terminal URLs settle separately before the
+# forge budget starts and consume no rotation slots.
 # A deliberately smaller configured budget remains bounded and may be
 # unmeasured, rather than being mislabeled unavailable. Each distinct URL is
 # attempted at most once per poll and its observation applied to every owner.
@@ -59,8 +62,13 @@
 # A URL whose last good observation is merged or closed is final: it is
 # never re-read, stays fresh, and every owner's saved row converges on that
 # observation, with a stale error beside it cleared.
-# A genuine failure prints its unavailable line only when it starts an episode
-# (no prior owner has an error); a successful read ends the episode.
+# A genuine failure stamps failed_at and prints its unavailable line only when
+# it starts an episode: no owner has an error and no owner failed within
+# FM_CONTRIBUTIONS_MAX_AGE. A successful read clears the error, but the episode
+# ends only once a full freshness window passes without a genuine failure, so a
+# forge that flaps between failing and succeeding wakes once rather than on
+# every failing poll. A head that changes during the read records the same
+# error, never stamps failed_at, and wakes whenever no owner has an error.
 # FM_CONTRIBUTIONS_NOW supplies an ISO UTC clock for tests, otherwise UTC now.
 # FM_CONTRIBUTIONS_READY_LABEL selects the equivalent triage label, default
 # ready-for-pr. Labels are matched case-insensitively and exactly.
@@ -100,7 +108,12 @@ command -v jq >/dev/null 2>&1 || fail 'jq is required to measure contribution co
 NOW=${FM_CONTRIBUTIONS_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 EPOCH=$(jq -nr --arg now "$NOW" '$now | fromdateiso8601') || fail 'invalid observation clock'
 MAX_AGE=${FM_CONTRIBUTIONS_MAX_AGE:-900}
-BUDGET=${FM_CONTRIBUTIONS_BUDGET:-20}
+BUDGET=${FM_CONTRIBUTIONS_BUDGET:-}
+BUDGET_CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/contributions-budget"
+if [ -z "$BUDGET" ] && [ -f "$BUDGET_CONFIG" ]; then
+  BUDGET=$(tr -d '[:space:]' < "$BUDGET_CONFIG") || fail 'unreadable poll budget config'
+fi
+BUDGET=${BUDGET:-20}
 case "$MAX_AGE" in ''|*[!0-9]*) fail 'invalid freshness bound' ;; esac
 case "$BUDGET" in ''|*[!0-9]*) fail 'invalid poll budget' ;; esac
 [ "$BUDGET" -ge 1 ] && [ "$BUDGET" -le 25 ] || fail 'poll budget must be 1..25 seconds'
@@ -233,11 +246,12 @@ wait_forges() { # background forge pids from one independent read wave
 
 observe() { # canonical GitHub URL -> normalized JSON
   local url=$1 part number kind endpoint head after label
+  rm -f -- "$TMP/budget-exhausted" "$TMP/forge-unavailable"
+  BUDGET_EXHAUSTED=0
+  HEAD_CHANGED=0
   case "$url" in https://github.com/*) ;; *) return 1 ;; esac
   part=${url#https://github.com/}; number=${part##*/}; part=${part%/*}; kind=${part##*/}; part=${part%/*}
   case "$kind" in pull) endpoint="repos/$part/pulls/$number" ;; issues) endpoint="repos/$part/issues/$number" ;; *) return 1 ;; esac
-  rm -f -- "$TMP/budget-exhausted" "$TMP/forge-unavailable"
-  BUDGET_EXHAUSTED=0
   forge api "$endpoint" > "$TMP/core.json" || return 1
   jq -e '(.state == "open" or .state == "closed") and (.user.login | type == "string")' "$TMP/core.json" >/dev/null || return 1
   if [ "$kind" = pull ]; then
@@ -258,7 +272,7 @@ observe() { # canonical GitHub URL -> normalized JSON
     jq -e 'type == "array" and all(.[]; type == "array")' "$TMP/comments.json" >/dev/null || return 1
     forge pr view "$url" --json headRefOid,reviewDecision > "$TMP/after.json" || return 1
     after=$(jq -er .headRefOid "$TMP/after.json")
-    [ "$head" = "$after" ] || { printf 'head changed during observation\n' > "$TMP/forge.err"; return 1; }
+    [ "$head" = "$after" ] || { HEAD_CHANGED=1; return 1; }
     jq -n --slurpfile core "$TMP/core.json" --slurpfile comments "$TMP/comments.json" \
       --slurpfile reviews "$TMP/reviews.json" --slurpfile inline "$TMP/inline.json" --slurpfile after "$TMP/after.json" --slurpfile checks "$TMP/checks.json" \
       --slurpfile statuses "$TMP/statuses.json" --slurpfile repo "$TMP/repo.json" '
@@ -349,7 +363,7 @@ settle_final() { # canonical-url task... : copy the URL's final observation to e
 }
 
 poll() {
-  local task url old kind error observed
+  local task url old kind error observed quiet
   local -a row
   acquire
   get_input
@@ -384,10 +398,13 @@ poll() {
     observed=0
     observe "$url" || observed=$?
     [ "$BUDGET_EXHAUSTED" -eq 0 ] || continue
-    # Wake once per failure episode: only when no owner has a prior error.
-    if [ "$observed" -ne 0 ] && jq -ne --slurpfile saved "$TMP/saved.json" --arg url "$url" --args \
+    # Wake once per failure episode. A genuine failure also stays inside an
+    # episode that ended less than a freshness window ago.
+    quiet=$(( HEAD_CHANGED ? 0 : MAX_AGE ))
+    if [ "$observed" -ne 0 ] && jq -ne --slurpfile saved "$TMP/saved.json" --arg url "$url" \
+      --argjson now "$EPOCH" --argjson quiet "$quiet" --args \
       'all($ARGS.positional[] as $task | [$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first;
-        .error == null)' "${row[@]:1}" >/dev/null; then
+        .error == null and (.failed_at == null or $now - (.failed_at | fromdateiso8601) >= $quiet))' "${row[@]:1}" >/dev/null; then
       printf 'contributions: observation unavailable for %s\n' "$url"
     fi
     case "$url" in */issues/*) kind=issue ;; *) kind="pr" ;; esac
@@ -409,7 +426,8 @@ poll() {
             pending:(($old.pending // []) + [$events[] | select(.token as $t | ($old.seen // [] | index($t)) == null)] | unique_by(.token))}' > "$TMP/row.json"
       else
         error='forge observation unavailable or changed during read'
-        jq --arg now "$NOW" --arg error "$error" '.checked_at=$now | .error=$error' "$old" > "$TMP/row.json"
+        jq --arg now "$NOW" --arg error "$error" --argjson head_changed "$HEAD_CHANGED" '
+          .checked_at=$now | .error=$error | if $head_changed == 1 then . else .failed_at=$now end' "$old" > "$TMP/row.json"
       fi
       write_record "$task" "$TMP/row.json"
       publish_pending "$task" "$url" "$TMP/row.json"
