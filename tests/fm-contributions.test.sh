@@ -1063,11 +1063,13 @@ test_unavailable_forge_records_error_and_wakes_once_per_episode() { # genuine ou
   : > "$home/forge/fault"
   out=$(poll_at 2026-09-16T11:00:00Z)
   [ -z "$out" ] || fail "a successful read printed: $out"
-  jq -e '.records[0].error == null' "$home/data/delivery/contributions.json" >/dev/null \
-    || fail 'a successful read did not end the failure episode'
+  out=$(poll_at 2026-09-16T11:05:00Z)
+  [ -z "$out" ] || fail "a second successful read printed: $out"
+  jq -e '.records[0] | .error == null and has("recovery_reads") == false' "$home/data/delivery/contributions.json" >/dev/null \
+    || fail 'two successful reads did not end the failure episode'
   printf 'down\n' > "$home/forge/fault"
   out=$(poll_at 2026-09-16T12:00:00Z)
-  [ "$out" = "$line" ] || fail "a new failure after a successful read did not wake: $out"
+  [ "$out" = "$line" ] || fail "a new failure after recovery did not wake: $out"
   pass 'a genuinely unavailable forge records an error and wakes once per failure episode'
 }
 
@@ -1093,8 +1095,11 @@ test_late_owner_keeps_failure_episode_suppressed() {
   out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW=2026-09-16T11:00:00Z "$ROOT/bin/fm-contributions.sh" poll) \
     || fail 'successful shared poll failed'
   [ -z "$out" ] || fail "a successful shared poll printed: $out"
+  out=$(with_home "$home" env FM_CONTRIBUTIONS_NOW=2026-09-16T11:05:00Z "$ROOT/bin/fm-contributions.sh" poll) \
+    || fail 'second successful shared poll failed'
+  [ -z "$out" ] || fail "a second successful shared poll printed: $out"
   for task in delivery duplicate; do
-    jq -e '.records[0].error == null' "$home/data/$task/contributions.json" >/dev/null \
+    jq -e '.records[0] | .error == null and has("recovery_reads") == false' "$home/data/$task/contributions.json" >/dev/null \
       || fail "owner $task did not end the shared failure episode"
   done
   printf 'down\n' > "$home/forge/fault"
@@ -1104,9 +1109,11 @@ test_late_owner_keeps_failure_episode_suppressed() {
   pass 'a late owner does not restart a shared forge failure episode'
 }
 
-test_flapping_forge_wakes_once_per_freshness_window() {
+test_flapping_forge_wakes_once_per_episode() {
   local home out line='contributions: observation unavailable for https://github.com/o/r/pull/8'
+  local record
   home=$(new_home flapping-episode)
+  record="$home/data/delivery/contributions.json"
   forge_home "$home"
   wrap_forge "$home"
   poll_at() { # fault time
@@ -1117,29 +1124,55 @@ test_flapping_forge_wakes_once_per_freshness_window() {
   [ "$out" = "$line" ] || fail "the first failure of an episode did not wake: $out"
   out=$(poll_at ok 2026-09-16T09:05:00Z)
   [ -z "$out" ] || fail "a successful read printed: $out"
-  jq -e '.records[0] | .error == null and .failed_at == "2026-09-16T09:00:00Z"' \
-    "$home/data/delivery/contributions.json" >/dev/null || fail 'a successful read lost the last failure time'
+  jq -e '.records[0] | .error == null and .recovery_reads == 1' "$record" >/dev/null \
+    || fail 'one successful read did not count toward recovery'
   out=$(poll_at down 2026-09-16T09:10:00Z)
-  [ -z "$out" ] || fail "a failure inside the freshness window after recovery woke again: $out"
+  [ -z "$out" ] || fail "a failure after a single successful read woke again: $out"
   jq -e '.records[0] | .error == "forge observation unavailable or changed during read"
-    and .checked_at == "2026-09-16T09:10:00Z" and .failed_at == "2026-09-16T09:10:00Z"' \
-    "$home/data/delivery/contributions.json" >/dev/null || fail 'a suppressed failure stopped recording its error evidence'
+    and .checked_at == "2026-09-16T09:10:00Z" and .recovery_reads == 0' "$record" >/dev/null \
+    || fail 'a suppressed failure stopped recording its error evidence'
   poll_at ok 2026-09-16T09:15:00Z >/dev/null
   out=$(poll_at head 2026-09-16T09:20:00Z)
-  [ "$out" = "$line" ] || fail "a head change inside the window was not surfaced: $out"
-  jq -e '.records[0].failed_at == "2026-09-16T09:10:00Z"' "$home/data/delivery/contributions.json" >/dev/null \
+  [ "$out" = "$line" ] || fail "a head change inside the episode was not surfaced: $out"
+  jq -e '.records[0].recovery_reads == 1' "$record" >/dev/null \
     || fail 'a head change was recorded as a forge failure'
-  poll_at ok 2026-09-16T09:22:00Z >/dev/null
-  out=$(poll_at down 2026-09-16T09:24:00Z)
-  [ -z "$out" ] || fail "a failure inside the window of the last failure woke: $out"
-  poll_at ok 2026-09-16T09:30:00Z >/dev/null
-  out=$(poll_at down 2026-09-16T09:39:00Z)
-  [ "$out" = "$line" ] || fail "a failure after a full failure-free freshness window did not wake: $out"
+  poll_at ok 2026-09-16T09:25:00Z >/dev/null
+  jq -e '.records[0] | has("recovery_reads") == false' "$record" >/dev/null \
+    || fail 'a second successful read did not end the episode'
+  out=$(poll_at down 2026-09-16T09:30:00Z)
+  [ "$out" = "$line" ] || fail "a failure after two successful reads did not wake: $out"
   pass 'a flapping forge wakes once per episode while head changes and later outages still surface'
 }
 
+# With three or more slow parked URLs the rotation reaches each one only every
+# fifteen minutes or more, so recovery must be counted in reads, not time.
+test_rarely_observed_url_stays_in_its_failure_episode() {
+  local home out line='contributions: observation unavailable for https://github.com/o/r/pull/8'
+  home=$(new_home rotation-episode)
+  forge_home "$home"
+  wrap_forge "$home"
+  poll_at() { # fault time
+    printf '%s\n' "$1" > "$home/forge/fault"
+    with_home "$home" env FM_CONTRIBUTIONS_NOW="$2" "$ROOT/bin/fm-contributions.sh" poll || fail "poll at $2 failed"
+  }
+  out=$(poll_at down 2026-09-16T09:00:00Z)
+  [ "$out" = "$line" ] || fail "the first failure of an episode did not wake: $out"
+  out=$(poll_at ok 2026-09-16T09:15:00Z)
+  [ -z "$out" ] || fail "a successful read printed: $out"
+  out=$(poll_at down 2026-09-16T09:30:00Z)
+  [ -z "$out" ] || fail "a failure one rotation after a single success woke again: $out"
+  poll_at ok 2026-09-16T09:45:00Z >/dev/null
+  out=$(poll_at down 2026-09-16T11:00:00Z)
+  [ -z "$out" ] || fail "a failure long after a single success woke again: $out"
+  poll_at ok 2026-09-16T11:15:00Z >/dev/null
+  poll_at ok 2026-09-16T11:30:00Z >/dev/null
+  out=$(poll_at down 2026-09-16T11:45:00Z)
+  [ "$out" = "$line" ] || fail "a failure after two consecutive successes did not wake: $out"
+  pass 'a rarely observed URL stays in its failure episode until two consecutive successful reads'
+}
+
 test_home_config_sets_the_poll_budget() {
-  local home out
+  local home out value
   home=$(new_home config-budget)
   forge_home "$home"
   wrap_forge "$home"
@@ -1167,16 +1200,32 @@ test_home_config_sets_the_poll_budget() {
     || fail 'check shim failed under an environment budget'
   cmp -s "$home/prior.json" "$home/data/delivery/contributions.json" \
     || fail 'the home budget config overrode an explicit environment budget'
-  printf 'many\n' > "$home/config/contributions-budget"
-  if out=$(with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" poll 2>&1); then
-    fail 'a malformed home budget config was accepted'
-  fi
-  [ "$out" = 'fm-contributions: invalid poll budget' ] || fail "a malformed home budget gave an unclear refusal: $out"
-  pass 'the home budget config governs armed checks without a re-arm, yields to the environment, and refuses malformed values'
+  for value in many 30; do
+    printf '%s\n' "$value" > "$home/config/contributions-budget"
+    if out=$(with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" poll 2>&1); then
+      fail "a bad home budget config ($value) was accepted"
+    fi
+    case "$value" in
+      many) [ "$out" = 'fm-contributions: invalid poll budget' ] ;;
+      *) [ "$out" = 'fm-contributions: poll budget must be 1..25 seconds' ] ;;
+    esac || fail "a bad home budget config ($value) gave an unclear refusal: $out"
+    bearings "$home" | jq -e '.contributions.known == 1 and .contributions.unreadable_records == 0' >/dev/null \
+      || fail "a bad home budget config ($value) broke the Bearings contribution snapshot"
+    with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" pending | jq -e 'length == 0' >/dev/null \
+      || fail "a bad home budget config ($value) broke pending"
+    with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" verdict delivery \
+      https://github.com/o/r/pull/8 "$HEAD_A" 'https://github.com/o/r/pull/8#issuecomment-1' maintainer 'waiting on review' \
+      || fail "a bad home budget config ($value) broke verdict"
+    with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" ack delivery \
+      https://github.com/o/r/pull/8 no-such-token || fail "a bad home budget config ($value) broke ack"
+    with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" arm >/dev/null \
+      || fail "a bad home budget config ($value) broke arm"
+  done
+  pass 'the home budget config governs armed checks without a re-arm, yields to the environment, and refuses bad values only in polls'
 }
 
 failures=0
-for test_name in test_actor_coverage test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_shared_url_observed_once test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_reservation_defers_later_url_when_fifteen_seconds_do_not_remain test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_flapping_forge_wakes_once_per_freshness_window test_home_config_sets_the_poll_budget; do
+for test_name in test_actor_coverage test_stale_verdict test_unchecked_is_not_silence test_newest_check_has_no_verdict test_comment_wake test_review_wake test_inline_wake test_ready_issue_wake test_fresh_issue_requires_maintainer test_missing_lane_remains_missing test_partial_freshness_keeps_measured_rows test_malformed_record_cannot_prove_silence test_issue_timeline_and_exact_ack test_verdict_retains_judged_head test_verdict_actor_values_are_discoverable test_observed_replacement_refreshes_verdict test_unobserved_head_leaves_verdict_unknown test_away_yolo_is_fleet_work test_away_yolo_cross_home_is_fleet_work test_retired_and_unsupported_coverage test_unsupported_forge_is_not_fleet_work test_held_unsupported_forge_is_not_captain_work test_shared_contribution_signal_wakes_once test_watcher_keeps_diagnostics_separate_from_contribution_wakes test_expired_child_unsupported_forge_stays_unmeasured test_watcher_surfaces_new_contribution_once test_home_summary_coverage test_unreadable_pending_is_not_empty test_record_task_identity_matches_dirname_basename test_read_only_views_create_no_state test_budget_refusal_between_calls test_budget_bounded_call_timeout test_genuine_failure_near_deadline_is_unavailable test_shared_url_observed_once test_terminal_contribution_settles test_late_owner_inherits_terminal_observation test_interrupted_multi_owner_poll_settles_every_owner test_done_task_open_pr_still_observed test_reservation_defers_later_url_when_fifteen_seconds_do_not_remain test_three_second_pr_reads_complete_fresh_in_one_cycle test_slow_read_deadline_kill_is_budget_refusal test_unmeasured_url_does_not_starve_the_tail test_budget_is_cut_down_to_the_watcher_check_bound test_arm_plumbs_a_configured_budget_into_the_check_shim test_unavailable_forge_records_error_and_wakes_once_per_episode test_late_owner_keeps_failure_episode_suppressed test_flapping_forge_wakes_once_per_episode test_rarely_observed_url_stays_in_its_failure_episode test_home_config_sets_the_poll_budget; do
   ( "$test_name" ) || failures=$((failures + 1))
 done
 [ "$failures" -eq 0 ] || fail "$failures contribution regressions"

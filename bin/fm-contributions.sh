@@ -18,7 +18,7 @@
 #
 # This script owns fm-contributions.v1: one atomic file per durable task with
 # task and records[]. Each record contains url, kind, checked_at, error,
-# failed_at, observation, verdict, seen event tokens, pending events, and
+# recovery_reads, observation, verdict, seen event tokens, pending events, and
 # notified tokens.
 # observation is one coherent forge read (a PR head is rechecked after fetching
 # checks/reviews). Checks are normalized by name, id, started_at, status and
@@ -35,9 +35,10 @@
 # poll consumes fm-fleet-snapshot.sh --contribution-input, a local-only read,
 # and spends at most FM_CONTRIBUTIONS_BUDGET seconds on forge reads, else the
 # home's config/contributions-budget (one integer line), else 20; either value
-# must be 1..25. The config file is read on every run, so changing it needs no
-# re-arm. An environment value set at arm time rides the generated check shim
-# into watcher runs. The effective budget is cut down to the watcher's own
+# must be 1..25. Only poll reads either value, on every run, so changing the
+# file needs no re-arm and a bad value refuses nothing but polls. An
+# environment value set at arm time rides the generated check shim into
+# watcher runs. The effective budget is cut down to the watcher's own
 # per-check bound (FM_CHECK_TIMEOUT, default 30, read from the poll's
 # environment because the watcher runs it as a direct child) with a
 # three-second margin. Every read is capped at five seconds, and a read killed
@@ -62,13 +63,15 @@
 # A URL whose last good observation is merged or closed is final: it is
 # never re-read, stays fresh, and every owner's saved row converges on that
 # observation, with a stale error beside it cleared.
-# A genuine failure stamps failed_at and prints its unavailable line only when
-# it starts an episode: no owner has an error and no owner failed within
-# FM_CONTRIBUTIONS_MAX_AGE. A successful read clears the error, but the episode
-# ends only once a full freshness window passes without a genuine failure, so a
-# forge that flaps between failing and succeeding wakes once rather than on
-# every failing poll. A head that changes during the read records the same
-# error, never stamps failed_at, and wakes whenever no owner has an error.
+# A genuine failure opens an episode (recovery_reads 0) and prints its
+# unavailable line only when it starts one: no owner has an error or an open
+# episode. A successful read clears the error and counts toward recovery
+# (recovery_reads 1); the second consecutive successful read after the last
+# genuine failure ends the episode and drops the field. Episodes end on
+# observations, not elapsed time, so a forge that flaps between failing and
+# succeeding wakes once however rarely the rotation reaches its URL. A head
+# that changes during the read records the same error, leaves recovery_reads
+# untouched, and wakes whenever no owner has an error.
 # FM_CONTRIBUTIONS_NOW supplies an ISO UTC clock for tests, otherwise UTC now.
 # FM_CONTRIBUTIONS_READY_LABEL selects the equivalent triage label, default
 # ready-for-pr. Labels are matched case-insensitively and exactly.
@@ -108,20 +111,7 @@ command -v jq >/dev/null 2>&1 || fail 'jq is required to measure contribution co
 NOW=${FM_CONTRIBUTIONS_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 EPOCH=$(jq -nr --arg now "$NOW" '$now | fromdateiso8601') || fail 'invalid observation clock'
 MAX_AGE=${FM_CONTRIBUTIONS_MAX_AGE:-900}
-BUDGET=${FM_CONTRIBUTIONS_BUDGET:-}
-BUDGET_CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/contributions-budget"
-if [ -z "$BUDGET" ] && [ -f "$BUDGET_CONFIG" ]; then
-  BUDGET=$(tr -d '[:space:]' < "$BUDGET_CONFIG") || fail 'unreadable poll budget config'
-fi
-BUDGET=${BUDGET:-20}
 case "$MAX_AGE" in ''|*[!0-9]*) fail 'invalid freshness bound' ;; esac
-case "$BUDGET" in ''|*[!0-9]*) fail 'invalid poll budget' ;; esac
-[ "$BUDGET" -ge 1 ] && [ "$BUDGET" -le 25 ] || fail 'poll budget must be 1..25 seconds'
-CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}
-case "$CHECK_TIMEOUT" in ''|*[!0-9]*|0) CHECK_TIMEOUT=30 ;; esac
-BUDGET_CAP=$((CHECK_TIMEOUT - 3))
-[ "$BUDGET_CAP" -ge 1 ] || BUDGET_CAP=1
-[ "$BUDGET" -le "$BUDGET_CAP" ] || BUDGET=$BUDGET_CAP
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-contributions.XXXXXX")
 LOCK_HELD=0
 cleanup() {
@@ -362,9 +352,26 @@ settle_final() { # canonical-url task... : copy the URL's final observation to e
   done
 }
 
+resolve_budget() { # only poll reads the budget, so a bad value refuses only polls
+  local config="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/contributions-budget" check_timeout cap
+  BUDGET=${FM_CONTRIBUTIONS_BUDGET:-}
+  if [ -z "$BUDGET" ] && [ -f "$config" ]; then
+    BUDGET=$(tr -d '[:space:]' < "$config") || fail 'unreadable poll budget config'
+  fi
+  BUDGET=${BUDGET:-20}
+  case "$BUDGET" in ''|*[!0-9]*) fail 'invalid poll budget' ;; esac
+  [ "$BUDGET" -ge 1 ] && [ "$BUDGET" -le 25 ] || fail 'poll budget must be 1..25 seconds'
+  check_timeout=${FM_CHECK_TIMEOUT:-30}
+  case "$check_timeout" in ''|*[!0-9]*|0) check_timeout=30 ;; esac
+  cap=$((check_timeout - 3))
+  [ "$cap" -ge 1 ] || cap=1
+  [ "$BUDGET" -le "$cap" ] || BUDGET=$cap
+}
+
 poll() {
-  local task url old kind error observed quiet
+  local task url old kind error observed
   local -a row
+  resolve_budget
   acquire
   get_input
   read_saved
@@ -399,12 +406,11 @@ poll() {
     observe "$url" || observed=$?
     [ "$BUDGET_EXHAUSTED" -eq 0 ] || continue
     # Wake once per failure episode. A genuine failure also stays inside an
-    # episode that ended less than a freshness window ago.
-    quiet=$(( HEAD_CHANGED ? 0 : MAX_AGE ))
+    # episode that has not yet seen two consecutive successful reads.
     if [ "$observed" -ne 0 ] && jq -ne --slurpfile saved "$TMP/saved.json" --arg url "$url" \
-      --argjson now "$EPOCH" --argjson quiet "$quiet" --args \
+      --argjson head_changed "$HEAD_CHANGED" --args \
       'all($ARGS.positional[] as $task | [$saved[0][] | select(.task == $task) | .records[] | select(.url == $url)] | first;
-        .error == null and (.failed_at == null or $now - (.failed_at | fromdateiso8601) >= $quiet))' "${row[@]:1}" >/dev/null; then
+        .error == null and ($head_changed == 1 or .recovery_reads == null))' "${row[@]:1}" >/dev/null; then
       printf 'contributions: observation unavailable for %s\n' "$url"
     fi
     case "$url" in */issues/*) kind=issue ;; *) kind="pr" ;; esac
@@ -423,11 +429,12 @@ poll() {
           | $old + {checked_at:$now,error:null,
             observation:($o + {absent_checks:((($old.observation.absent_checks // []) + [($old.observation.checks // [])[] | .name]) - [$o.checks[].name] | unique)}),
             seen:($events | map(.token)),
-            pending:(($old.pending // []) + [$events[] | select(.token as $t | ($old.seen // [] | index($t)) == null)] | unique_by(.token))}' > "$TMP/row.json"
+            pending:(($old.pending // []) + [$events[] | select(.token as $t | ($old.seen // [] | index($t)) == null)] | unique_by(.token))}
+          | if $old.recovery_reads == 0 then .recovery_reads = 1 else del(.recovery_reads) end' > "$TMP/row.json"
       else
         error='forge observation unavailable or changed during read'
         jq --arg now "$NOW" --arg error "$error" --argjson head_changed "$HEAD_CHANGED" '
-          .checked_at=$now | .error=$error | if $head_changed == 1 then . else .failed_at=$now end' "$old" > "$TMP/row.json"
+          .checked_at=$now | .error=$error | if $head_changed == 1 then . else .recovery_reads=0 end' "$old" > "$TMP/row.json"
       fi
       write_record "$task" "$TMP/row.json"
       publish_pending "$task" "$url" "$TMP/row.json"

@@ -13,7 +13,7 @@ def valid_record:
     and ((.notified // []) | type == "array" and all(.[]; type == "string"))
     and (.error == null or (.error | type == "string"))
     and (.checked_at == null or (.checked_at | fromdateiso8601 | type == "number"))
-    and (.failed_at == null or (.failed_at | fromdateiso8601 | type == "number"))
+    and (.recovery_reads == null or (.recovery_reads | IN(0,1)))
     and (.verdict == null or (.verdict | (.head | sha) and (.source | type == "string")
       and (.actor | IN("captain","fleet","maintainer","nobody")) and (.summary | type == "string")))
     and (.observation == null or (.kind as $kind | .observation |
