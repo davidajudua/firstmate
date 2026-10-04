@@ -1,0 +1,44 @@
+# Target 46d6bf85: config/contributions-budget handling in a lab home
+## config/contributions-budget = '30'
+$ state/contributions.check.sh (poll)
+fm-contributions: poll budget must be 1..25 seconds
+  exit=1
+$ fm-contributions.sh pending
+[]
+  exit=0
+$ fm-bearings-snapshot.sh --json | .contributions
+{"known":1,"checked":0,"counts":{"captain":0,"fleet":1,"maintainer":0,"nobody":0},"unreadable_records":0}
+  exit=0
+$ fm-contributions.sh arm
+registered: state/contributions.check.sh
+  exit=0
+## config/contributions-budget = 'many'
+$ state/contributions.check.sh (poll)
+fm-contributions: invalid poll budget
+  exit=1
+$ fm-contributions.sh pending
+[]
+  exit=0
+$ fm-bearings-snapshot.sh --json | .contributions
+{"known":1,"checked":0,"counts":{"captain":0,"fleet":1,"maintainer":0,"nobody":0},"unreadable_records":0}
+  exit=0
+$ fm-contributions.sh arm
+registered: state/contributions.check.sh
+  exit=0
+## config/contributions-budget = '0'
+$ state/contributions.check.sh (poll)
+fm-contributions: poll budget must be 1..25 seconds
+  exit=1
+$ fm-contributions.sh pending
+[]
+  exit=0
+$ fm-bearings-snapshot.sh --json | .contributions
+{"known":1,"checked":0,"counts":{"captain":0,"fleet":1,"maintainer":0,"nobody":0},"unreadable_records":0}
+  exit=0
+$ fm-contributions.sh arm
+registered: state/contributions.check.sh
+  exit=0
+## config/contributions-budget = '1' with a slow (7s) forge, no re-arm
+  exit=0 elapsed=1s wake='' record_unchanged=yes
+## config/contributions-budget = '20', healthy forge, no re-arm
+  exit=0 checked_at=2026-10-04T14:15:00Z

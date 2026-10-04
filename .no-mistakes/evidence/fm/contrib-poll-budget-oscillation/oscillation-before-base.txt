@@ -1,0 +1,21 @@
+# Base 9ea0c41a: generated contributions check shim, oscillating forge (bug reproduction)
+## 1. Oscillating slow forge, observed every cadence (fail/ok/fail/ok...)
+2026-10-04T09:00:00Z   forge=down  rc=0 wake=YES  record={"checked_at":"2026-10-04T09:00:00Z","error":true,"recovery_reads":null}
+    stdout: contributions: observation unavailable for https://github.com/o/r/pull/8
+2026-10-04T09:05:00Z   forge=ok    rc=0 wake=-    record={"checked_at":"2026-10-04T09:05:00Z","error":false,"recovery_reads":null}
+2026-10-04T09:10:00Z   forge=down  rc=0 wake=YES  record={"checked_at":"2026-10-04T09:10:00Z","error":true,"recovery_reads":null}
+    stdout: contributions: observation unavailable for https://github.com/o/r/pull/8
+2026-10-04T09:15:00Z   forge=ok    rc=0 wake=-    record={"checked_at":"2026-10-04T09:15:00Z","error":false,"recovery_reads":null}
+2026-10-04T09:20:00Z   forge=down  rc=0 wake=YES  record={"checked_at":"2026-10-04T09:20:00Z","error":true,"recovery_reads":null}
+    stdout: contributions: observation unavailable for https://github.com/o/r/pull/8
+2026-10-04T09:25:00Z   forge=ok    rc=0 wake=-    record={"checked_at":"2026-10-04T09:25:00Z","error":false,"recovery_reads":null}
+2026-10-04T09:30:00Z   forge=down  rc=0 wake=YES  record={"checked_at":"2026-10-04T09:30:00Z","error":true,"recovery_reads":null}
+    stdout: contributions: observation unavailable for https://github.com/o/r/pull/8
+## 2. Rotation with 3+ parked URLs: URL observed only every 15+ min, single success in between
+2026-10-04T09:45:00Z   forge=ok    rc=0 wake=-    record={"checked_at":"2026-10-04T09:45:00Z","error":false,"recovery_reads":null}
+2026-10-04T10:00:00Z   forge=down  rc=0 wake=YES  record={"checked_at":"2026-10-04T10:00:00Z","error":true,"recovery_reads":null}
+    stdout: contributions: observation unavailable for https://github.com/o/r/pull/8
+2026-10-04T11:00:00Z   forge=ok    rc=0 wake=-    record={"checked_at":"2026-10-04T11:00:00Z","error":false,"recovery_reads":null}
+2026-10-04T12:30:00Z   forge=down  rc=0 wake=YES  record={"checked_at":"2026-10-04T12:30:00Z","error":true,"recovery_reads":null}
+    stdout: contributions: observation unavailable for https://github.com/o/r/pull/8
+## 3. Head change during read inside an open episode (must still surface)
