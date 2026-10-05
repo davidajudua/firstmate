@@ -1200,6 +1200,23 @@ test_home_config_sets_the_poll_budget() {
     || fail 'check shim failed under an environment budget'
   cmp -s "$home/prior.json" "$home/data/delivery/contributions.json" \
     || fail 'the home budget config overrode an explicit environment budget'
+  for value in 08 09; do
+    mutate_record "$home" delivery '.records[0].checked_at="2026-09-15T08:00:00Z"'
+    printf '%s\n' "$value" > "$home/config/contributions-budget"
+    out=$(with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" poll 2>&1) \
+      || fail "a leading-zero home budget config ($value) failed the poll: $out"
+    [ -z "$out" ] || fail "a leading-zero home budget config ($value) printed: $out"
+    jq -e --arg now "$NOW" '.records[0] | .checked_at == $now and .error == null' \
+      "$home/data/delivery/contributions.json" >/dev/null \
+      || fail "a leading-zero home budget config ($value) was not read as $((10#$value)) decimal seconds"
+  done
+  mutate_record "$home" delivery '.records[0].checked_at="2026-09-15T08:00:00Z"'
+  cp "$home/data/delivery/contributions.json" "$home/prior.json"
+  printf '01\n' > "$home/config/contributions-budget"
+  out=$(with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" poll 2>&1) \
+    || fail "a leading-zero one-second home budget config failed the poll: $out"
+  cmp -s "$home/prior.json" "$home/data/delivery/contributions.json" \
+    || fail 'a leading-zero home budget config 01 was not read as one second'
   for value in '' ' \n' '\n' '1 5\n' '1\n5\n' '15\n\n' ' 15\n' 'many\n' '30\n'; do
     printf '%b' "$value" > "$home/config/contributions-budget"
     if out=$(with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" poll 2>&1); then

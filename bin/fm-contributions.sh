@@ -364,6 +364,7 @@ resolve_budget() { # only poll reads the budget, so a bad value refuses only pol
   fi
   BUDGET=${BUDGET:-20}
   case "$BUDGET" in ''|*[!0-9]*) fail 'invalid poll budget' ;; esac
+  BUDGET=$((10#$BUDGET))
   [ "$BUDGET" -ge 1 ] && [ "$BUDGET" -le 25 ] || fail 'poll budget must be 1..25 seconds'
   check_timeout=${FM_CHECK_TIMEOUT:-30}
   case "$check_timeout" in ''|*[!0-9]*|0) check_timeout=30 ;; esac
