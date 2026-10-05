@@ -34,9 +34,10 @@
 #
 # poll consumes fm-fleet-snapshot.sh --contribution-input, a local-only read,
 # and spends at most FM_CONTRIBUTIONS_BUDGET seconds on forge reads, else the
-# home's config/contributions-budget (one integer line), else 20; either value
-# must be 1..25. Only poll reads either value, on every run, so changing the
-# file needs no re-arm and a bad value refuses nothing but polls. An
+# home's config/contributions-budget (exactly one integer line; an empty,
+# blank, multi-token or multi-line file refuses the poll), else 20; either
+# value must be 1..25. Only poll reads either value, on every run, so
+# changing the file needs no re-arm and a bad value refuses nothing but polls. An
 # environment value set at arm time rides the generated check shim into
 # watcher runs. The effective budget is cut down to the watcher's own
 # per-check bound (FM_CHECK_TIMEOUT, default 30, read from the poll's
@@ -356,7 +357,10 @@ resolve_budget() { # only poll reads the budget, so a bad value refuses only pol
   local config="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/contributions-budget" check_timeout cap
   BUDGET=${FM_CONTRIBUTIONS_BUDGET:-}
   if [ -z "$BUDGET" ] && [ -f "$config" ]; then
-    BUDGET=$(tr -d '[:space:]' < "$config") || fail 'unreadable poll budget config'
+    BUDGET=$(cat "$config" && printf x) || fail 'unreadable poll budget config'
+    BUDGET=${BUDGET%x}
+    BUDGET=${BUDGET%$'\n'}
+    case "$BUDGET" in ''|*[!0-9]*) fail 'poll budget config must be one integer line' ;; esac
   fi
   BUDGET=${BUDGET:-20}
   case "$BUDGET" in ''|*[!0-9]*) fail 'invalid poll budget' ;; esac

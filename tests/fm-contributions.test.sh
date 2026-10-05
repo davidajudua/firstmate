@@ -1200,14 +1200,14 @@ test_home_config_sets_the_poll_budget() {
     || fail 'check shim failed under an environment budget'
   cmp -s "$home/prior.json" "$home/data/delivery/contributions.json" \
     || fail 'the home budget config overrode an explicit environment budget'
-  for value in many 30; do
-    printf '%s\n' "$value" > "$home/config/contributions-budget"
+  for value in '' ' \n' '\n' '1 5\n' '1\n5\n' '15\n\n' ' 15\n' 'many\n' '30\n'; do
+    printf '%b' "$value" > "$home/config/contributions-budget"
     if out=$(with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" poll 2>&1); then
       fail "a bad home budget config ($value) was accepted"
     fi
     case "$value" in
-      many) [ "$out" = 'fm-contributions: invalid poll budget' ] ;;
-      *) [ "$out" = 'fm-contributions: poll budget must be 1..25 seconds' ] ;;
+      '30\n') [ "$out" = 'fm-contributions: poll budget must be 1..25 seconds' ] ;;
+      *) [ "$out" = 'fm-contributions: poll budget config must be one integer line' ] ;;
     esac || fail "a bad home budget config ($value) gave an unclear refusal: $out"
     bearings "$home" | jq -e '.contributions.known == 1 and .contributions.unreadable_records == 0' >/dev/null \
       || fail "a bad home budget config ($value) broke the Bearings contribution snapshot"
@@ -1221,7 +1221,7 @@ test_home_config_sets_the_poll_budget() {
     with_home "$home" env -u FM_CONTRIBUTIONS_BUDGET "$ROOT/bin/fm-contributions.sh" arm >/dev/null \
       || fail "a bad home budget config ($value) broke arm"
   done
-  pass 'the home budget config governs armed checks without a re-arm, yields to the environment, and refuses bad values only in polls'
+  pass 'the home budget config governs armed checks without a re-arm, yields to the environment, and refuses anything but one valid integer line only in polls'
 }
 
 failures=0
