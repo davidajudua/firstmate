@@ -1,0 +1,31 @@
+# fm-contributions.sh poll against a lab home, config/contributions-budget varied
+## target e8af9247 (this change)
+target  config=''           exit=1 output=fm-contributions: poll budget config must be one integer line
+target  config=\ \\n        exit=1 output=fm-contributions: poll budget config must be one integer line
+target  config=\\n          exit=1 output=fm-contributions: poll budget config must be one integer line
+target  config=1\ 5\\n      exit=1 output=fm-contributions: poll budget config must be one integer line
+target  config=1\\n5\\n     exit=1 output=fm-contributions: poll budget config must be one integer line
+target  config=15\\n\\n     exit=1 output=fm-contributions: poll budget config must be one integer line
+target  config=\ 15\\n      exit=1 output=fm-contributions: poll budget config must be one integer line
+target  config=many\\n      exit=1 output=fm-contributions: poll budget config must be one integer line
+target  config=30\\n        exit=1 output=fm-contributions: poll budget must be 1..25 seconds
+target  config=15\\n        exit=0 output=<none>
+target  config=15           exit=0 output=<none>
+target  config=08\\n        exit=0 output=<none>
+target  config=010\\n       exit=0 output=<none>
+## base 474594a9 (before strict config validation)
+before  config=''           exit=0 output=<none>
+before  config=1\ 5\\n      exit=0 output=<none>
+before  config=1\\n5\\n     exit=0 output=<none>
+before  config=\ 15\\n      exit=0 output=<none>
+before  config=15\\n        exit=0 output=<none>
+## read-only subcommands with a bad config (target)
+[]
+pending exit=0
+fm-contributions: snapshot needs canonical input
+
+snapshot exit=0
+## env var path unchanged (target, bad config ignored when env set)
+env=10 exit=0
+fm-contributions: invalid poll budget
+env='1 5' exit=1

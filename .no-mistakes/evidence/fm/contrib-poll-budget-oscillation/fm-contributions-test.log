@@ -47,5 +47,4 @@ ok - a genuinely unavailable forge records an error and wakes once per failure e
 ok - a late owner does not restart a shared forge failure episode
 ok - a flapping forge wakes once per episode while head changes and later outages still surface
 ok - a rarely observed URL stays in its failure episode until two consecutive successful reads
-ok - the home budget config governs armed checks without a re-arm, yields to the environment, and refuses bad values only in polls
-exit=0
+ok - the home budget config governs armed checks without a re-arm, yields to the environment, and refuses anything but one valid integer line only in polls
