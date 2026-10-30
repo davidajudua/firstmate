@@ -26,6 +26,7 @@
 #   (c) local-only + merged into local main, no remote         -> ALLOW  (no regression)
 #   (d) no-mistakes + HEAD on origin remote-tracking branch    -> ALLOW  (no regression)
 #   (e) no-mistakes + unpushed, no PR, content not in default  -> REFUSE (safety)
+#   (e2) no-mistakes + branch pushed, then a commit ahead of it -> REFUSE (ahead)
 #   (f) local-only + truly unpushed + --force                  -> ALLOW  (escape hatch)
 #   (g) no-mistakes + squash-merged PR, exact PR head          -> ALLOW  (squash fix)
 #   (h) no-mistakes + no PR but content already in default     -> ALLOW  (content fallback)
@@ -936,6 +937,28 @@ test_no_mistakes_truly_unpushed_refuses() {
   expect_code 1 "$rc" "nm-unpushed: teardown should refuse"
   grep -q REFUSED "$case_dir/stderr" || fail "nm-unpushed: no REFUSED line in stderr"
   pass "no-mistakes worktree with genuinely unlanded work is refused (safety preserved)"
+}
+
+test_no_mistakes_ahead_of_remote_refuses() {
+  local case_dir rc
+  case_dir=$(make_case nm-ahead)
+  write_meta "$case_dir" no-mistakes ship
+  wt_commit_file "$case_dir" feature.txt hello "pushed work"
+  git -C "$case_dir/wt" push -q origin fm/task-x1
+  git -C "$case_dir/project" fetch -q origin
+  wt_commit_file "$case_dir" feature.txt "hello again" "work after the push"
+
+  set +e
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 1 "$rc" "nm-ahead: teardown should refuse a branch ahead of its remote"
+  grep -q "REFUSED: worktree .* has work not on any remote" "$case_dir/stderr" \
+    || fail "nm-ahead: refusal did not cite work missing from the remote"
+  grep -q "work after the push" "$case_dir/stderr" || fail "nm-ahead: refusal did not list the commit ahead of the remote"
+  [ -e "$case_dir/state/task-x1.meta" ] || fail "nm-ahead: refused teardown removed the task record"
+  pass "no-mistakes worktree whose branch is ahead of its pushed remote branch is refused"
 }
 
 test_squash_merged_branch_deleted_allows() {
@@ -5976,6 +5999,7 @@ test_local_only_truly_unpushed_refuses
 test_local_only_merged_to_local_main_allows
 test_no_mistakes_origin_remote_allows
 test_no_mistakes_truly_unpushed_refuses
+test_no_mistakes_ahead_of_remote_refuses
 test_local_only_force_overrides_unpushed
 test_secondmate_pr_registration_publishes_ready_line
 test_secondmate_pr_ready_line_waits_for_green_when_opted_in
