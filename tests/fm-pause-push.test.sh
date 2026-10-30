@@ -209,7 +209,7 @@ test_active_pipeline_run_is_never_pushed() {
   pass "a paused line written during an active pipeline run leaves the push to the pipeline"
 }
 
-test_manual_push_retries_a_handled_pause() {
+test_failed_push_is_reported_once() {
   local out
   make_task retry
   declare_status 'paused [at=8]: waiting'
@@ -220,10 +220,10 @@ test_manual_push_retries_a_handled_pause() {
 
   git -C "$WT" remote set-url origin "file://$ORIGIN"
   assert_equals "" "$(run_scan)" "a handled pause was retried by scan"
-  pause_push push "$ID" >/dev/null || fail "manual push exited nonzero"
-  assert_equals "$(git -C "$WT" rev-parse HEAD)" "$(remote_sha)" "manual push did not push"
-  assert_equals pushed "$(record outcome)" "manual push outcome"
-  pass "a failed push is reported once and the manual push retries it"
+  assert_equals "" "$(remote_sha)" "a handled failure pushed on a later scan"
+  assert_equals failed "$(record outcome)" "later scan changed the failure record"
+  assert_equals 1 "$(wake_rows)" "a handled failure queued another wake"
+  pass "a failed push is reported once and later scans do not retry it"
 }
 
 test_watcher_poll_pushes_and_wakes() {
@@ -264,5 +264,5 @@ fm_test_run \
   test_remote_already_containing_head_reads_behind \
   test_ineligible_tasks_are_never_pushed \
   test_active_pipeline_run_is_never_pushed \
-  test_manual_push_retries_a_handled_pause \
+  test_failed_push_is_reported_once \
   test_watcher_poll_pushes_and_wakes

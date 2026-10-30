@@ -3,15 +3,13 @@
 #
 # Usage:
 #   fm-pause-push.sh scan
-#   fm-pause-push.sh push <task-id>
 #
 # A ship task whose declared wait is a `paused:` line (status_declared_wait_line
 # and status_is_paused in bin/fm-classify-lib.sh own that reading) gets one plain
 # `git push origin refs/heads/<branch>:refs/heads/<branch>` of its existing task
 # branch, so paused work also lives on the remote while the worker waits.
 # `scan` visits every task record in this home and attempts each paused line
-# once; bin/fm-watch.sh runs it every poll. `push <task-id>` is the manual retry:
-# it attempts that task's current paused line even when it was already handled.
+# once; bin/fm-watch.sh runs it every poll.
 #
 # The push never forces, never deletes a ref, never creates a commit, never
 # opens a pull request, and never targets the project's default branch.
@@ -67,7 +65,7 @@ case "$PAUSE_PUSH_TIMEOUT" in ''|*[!0-9]*|0) PAUSE_PUSH_TIMEOUT=30 ;; esac
 [ "$PAUSE_PUSH_TIMEOUT" -le 300 ] || PAUSE_PUSH_TIMEOUT=300
 
 usage() {
-  printf 'usage: fm-pause-push.sh scan | push <task-id>\n' >&2
+  printf 'usage: fm-pause-push.sh scan\n' >&2
   exit 2
 }
 
@@ -108,16 +106,16 @@ default_branch() {  # <worktree>
 }
 
 # Attempt one task. Prints `actionable: <payload>` when firstmate must hear the
-# result. <force> 1 ignores an already-handled paused line.
-attempt() {  # <id> <force>
-  local id=$1 force=$2 meta="$STATE/$1.meta" status="$STATE/$1.status"
+# result.
+attempt() {  # <id>
+  local id=$1 meta="$STATE/$1.meta" status="$STATE/$1.status"
   local line hash kind mode forge wt state branch current default dirty_raw dirty_count=0
   local dirty_list='' head='' outcome detail out rc payload
   [ -f "$meta" ] || return 0
   line=$(status_declared_wait_line "$status")
   status_is_paused "$line" || return 0
   hash=$(printf '%s' "$line" | cksum | cut -d' ' -f1)
-  if [ "$force" != 1 ] && [ "$(record_value "$STATE/$id.pause-push" line)" = "$hash" ]; then
+  if [ "$(record_value "$STATE/$id.pause-push" line)" = "$hash" ]; then
     return 0
   fi
 
@@ -215,14 +213,8 @@ case "${1:-}" in
     for meta in "$STATE"/*.meta; do
       [ -f "$meta" ] || continue
       id=$(basename "$meta" .meta)
-      attempt "$id" 0 || printf 'fm-pause-push: could not record the result for %s\n' "$id" >&2
+      attempt "$id" || printf 'fm-pause-push: could not record the result for %s\n' "$id" >&2
     done
-    ;;
-  push)
-    [ "$#" -eq 2 ] || usage
-    case "$2" in ''|*/*|.*) usage ;; esac
-    [ -f "$STATE/$2.meta" ] || { printf 'fm-pause-push: no task record for %s\n' "$2" >&2; exit 1; }
-    attempt "$2" 1
     ;;
   *) usage ;;
 esac
