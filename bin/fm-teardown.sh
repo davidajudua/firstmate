@@ -43,8 +43,8 @@
 # that closes the call.
 # REFUSES if the worktree holds work that has not LANDED, because cleanup
 # hard-resets/removes the worktree and kills its processes. Work has landed when it is
-# reachable from any remote-tracking branch (a fork counts as a remote, so
-# upstream-contribution PRs pushed to a fork satisfy this in any mode), OR - for a
+# reachable from a remote-tracking branch, subject to the recorded-branch check
+# below, OR - for a
 # normal ship task whose commits are not so reachable - when its PR is merged and
 # GitHub reports a PR head that contains the current local work, or its content is
 # already present in the up-to-date default branch. This recognizes the common
@@ -52,6 +52,13 @@
 # on a remote yet the change is fully in main. A task whose meta records
 # base_branch= (bin/fm-spawn.sh) runs that content check against origin's copy of
 # its base branch instead of the default branch.
+# A non-local-only ship with a recorded branch must also have HEAD contained in
+# origin/<branch>, or pass the merged-PR or content-landed proof above.
+# A copy on another remote branch alone does not satisfy this check.
+# Teardown refreshes the recorded origin branch with a bounded fetch; if the
+# fetch fails or times out, it reports the failure and uses the cached ref.
+# Missing, ahead, or diverged origin branches refuse cleanup unless work is
+# proven landed. tests/fm-teardown.test.sh covers these preservation checks.
 # Squash merges collapse the branch's commits, so per-commit patch ids against main
 # no longer match, and a pipeline rebase can leave the local worktree diverged from
 # the PR head. A diverged copy is not treated as landed: path-set coverage, git
@@ -2108,7 +2115,7 @@ teardown_note_dirty_return() {
 }
 
 validate_worktree_teardown_safety() {
-  local dirty_raw dirty unpushed_raw unpushed DEFAULT unmerged_raw unmerged branch
+  local dirty_raw dirty unpushed_raw unpushed DEFAULT unmerged_raw unmerged branch remote_ref fetch_note reason
   [ -d "$WT" ] || return 0
   [ "$FORCE" != "--force" ] || return 0
   case "$KIND" in
@@ -2124,6 +2131,30 @@ validate_worktree_teardown_safety() {
     return 1
   fi
   dirty=$(printf '%s\n' "$dirty_raw" | grep -vE '^\?\? (\.claude/|\.fm-(grok|kimi)-turnend$)' || true)
+
+  branch=$(grep '^branch=' "$META" | cut -d= -f2- || true)
+  if [ "$MODE" != local-only ] && [ -n "$branch" ] && [ -z "$dirty" ]; then
+    remote_ref="refs/remotes/origin/$branch"
+    fetch_note=
+    if ! fm_run_timed 10 env GIT_TERMINAL_PROMPT=0 git -C "$WT" fetch --quiet --no-tags origin \
+      "+refs/heads/$branch:$remote_ref" >/dev/null 2>&1; then
+      fetch_note="fetch of origin/$branch failed or timed out; using cached ref"
+      printf 'teardown: %s\n' "$fetch_note" >&2
+    fi
+    if ! git -C "$WT" merge-base --is-ancestor HEAD "$remote_ref" 2>/dev/null; then
+      if ! work_is_landed "$branch"; then
+        if git -C "$WT" rev-parse --verify --quiet "$remote_ref" >/dev/null; then
+          reason="ahead of origin/$branch or diverged from it"
+        else
+          reason="no remote branch origin/$branch"
+        fi
+        printf 'REFUSED: worktree %s has work %s.\n' "$WT" "$reason" >&2
+        [ -z "${CONTENT_LANDED_PROOF_ERROR:-}" ] || printf 'content-landed proof unavailable: %s\n' "$CONTENT_LANDED_PROOF_ERROR" >&2
+        echo "Push the branch, land its PR, or get the captain's explicit OK to discard, then --force." >&2
+        return 1
+      fi
+    fi
+  fi
 
   if ! unpushed_raw=$(git -C "$WT" log --oneline HEAD --not --remotes -- 2>/dev/null); then
     if worktree_safety_blocked_by_lock "commits not on a remote"; then
@@ -4097,6 +4128,7 @@ rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \
   "$STATE/$ID.control-relaunch" "$STATE/$ID.control-relaunch.meta-prior" \
   "$STATE/$ID.control-relaunch.brief-prior" "$STATE/$ID.control-relaunch.note" \
   "$STATE/$ID.reconcile-nudged" "$STATE/$ID.gemini-settings.json" \
+  "$STATE/$ID.pause-push" \
   "$STATE/$ID.claude-settings.json" "$STATE/$ID.devin-config.json" \
   "$STATE/$ID.polytoken-busy.sh" \
   "$STATE/.$ID.branch-outcome-index" \
