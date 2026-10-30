@@ -18,6 +18,10 @@
 # with the enclosing repo left untouched, in both the whole-fleet and
 # single-project forms, while a symlinked clone dir still syncs.
 #
+# It also pins gone-branch pruning: a branch whose remote branch was deleted is
+# pruned only when its tip was pushed (a squash-merged branch still prunes), while
+# a branch with a commit made after its last push is kept and reported.
+#
 # It also pins the orphaned .git/packed-refs.lock recovery in the fetch step
 # (fetch_with_packed_refs_lock_guard, backed by bin/fm-lock-lib.sh's shared
 # staleness proof): a provably-stale lock is retried then removed and the clone

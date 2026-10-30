@@ -20,8 +20,9 @@
 # repository (the firstmate checkout) and be synced under that directory's label.
 # Anything else is reported as "skipped: not a clone root" naming the repository
 # that would have been touched.
-# Pruning never deletes the checked-out branch or a branch that still has a
-# worktree, so it cannot discard unlanded work; set FM_FLEET_PRUNE=0 to disable it.
+# Pruning never deletes the checked-out branch, a branch that still has a
+# worktree, or a branch whose tip is not proven pushed (reported as "kept"), so
+# it cannot discard unlanded work; set FM_FLEET_PRUNE=0 to disable it.
 # When the fetch fails on an orphaned .git/packed-refs.lock (left by a ref rewrite
 # killed mid-write - e.g. a timed-out bootstrap sync or a teardown process kill),
 # it is retried with a bounded wait and removed only when provably stale; see
@@ -220,17 +221,31 @@ fetch_with_packed_refs_lock_guard() {
   return "$rc"
 }
 
+# True when every commit on gone branch $1 is known to be on the remote: its tip
+# is contained in some current remote-tracking ref, or in the value its upstream
+# held just before this sync's fetch pruned it (PREFETCH_REMOTE_REFS). fetch
+# --prune deletes a remote-tracking ref together with its reflog, so that
+# snapshot is the only local record of what a squash-merged branch last pushed.
+gone_branch_tip_pushed() {
+  local ref="refs/heads/$1" upstream pushed
+  [ -z "$(git -C "$PROJ" for-each-ref --count=1 --contains "$ref" refs/remotes 2>/dev/null)" ] || return 0
+  upstream=$(git -C "$PROJ" for-each-ref --format='%(upstream)' "$ref" 2>/dev/null)
+  [ -n "$upstream" ] || return 1
+  pushed=$(printf '%s\n' "$PREFETCH_REMOTE_REFS" | awk -v r="$upstream" '$1 == r { print $2 }')
+  [ -n "$pushed" ] && git -C "$PROJ" merge-base --is-ancestor "$ref" "$pushed" 2>/dev/null
+}
+
 prune_gone_branches() {
   # Delete local branches whose upstream tracking branch is gone - the remote
   # branch was deleted, which in this fleet means its PR merged - as long as
-  # nothing still needs them. Never the checked-out branch, and never a branch
-  # that still has a worktree (a live or not-yet-torn-down task). "Gone" plus
-  # "no worktree" already proves the work landed: teardown removes a branch's
-  # worktree only after confirming the work reached the remote. We deliberately
-  # do NOT also require the branch to be an ancestor of origin/<default> - PRs in
-  # this fleet are squash-merged, so a merged branch is never an ancestor and
-  # such a check would prune nothing. The no-worktree guard is the real safety
-  # net. Set FM_FLEET_PRUNE=0 to skip pruning entirely.
+  # nothing still needs them. Never the checked-out branch, never a branch that
+  # still has a worktree (a live or not-yet-torn-down task), and never a branch
+  # whose tip is not proven pushed (gone_branch_tip_pushed): a commit made after
+  # the last push exists nowhere else, so that branch is kept and reported. We
+  # deliberately do NOT require the branch to be an ancestor of origin/<default> -
+  # PRs in this fleet are squash-merged, so a merged branch is never an ancestor
+  # and such a check would prune nothing. Set FM_FLEET_PRUNE=0 to skip pruning
+  # entirely.
   [ "${FM_FLEET_PRUNE:-1}" != "0" ] || return 0
 
   local worktree_branches current refline branch track
@@ -245,6 +260,10 @@ prune_gone_branches() {
     [ -n "$branch" ] || continue
     [ "$branch" != "$current" ] || continue
     if printf '%s\n' "$worktree_branches" | grep -Fxq -- "$branch"; then
+      continue
+    fi
+    if ! gone_branch_tip_pushed "$branch"; then
+      echo "$label: kept $branch: upstream gone but its tip is not proven pushed (it may hold unpushed commits)"
       continue
     fi
     if git -C "$PROJ" branch -D -- "$branch" >/dev/null 2>&1; then
@@ -342,6 +361,7 @@ sync_project() {
     return 0
   fi
 
+  PREFETCH_REMOTE_REFS=$(git -C "$PROJ" for-each-ref --format='%(refname) %(objectname)' refs/remotes 2>/dev/null || true)
   if ! fetch_with_packed_refs_lock_guard; then
     reason="fetch failed"
     if [ -n "$FETCH_OUTPUT" ]; then
