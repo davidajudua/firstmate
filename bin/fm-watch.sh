@@ -3770,7 +3770,7 @@ while :; do
       pause_push_due=1
       break
     fi
-    pause_push_outcome= pause_push_at=0
+    pause_push_outcome='' pause_push_at=0
     while IFS='=' read -r pause_push_key pause_push_value; do
       case "$pause_push_key" in
         outcome) pause_push_outcome=$pause_push_value ;;
