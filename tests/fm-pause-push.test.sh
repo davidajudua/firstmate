@@ -111,7 +111,12 @@ test_clean_pause_push_is_silent_and_skips_non_paused_tasks() {
   declare_status 'working [at=1]: building'
   out=$(run_scan) || fail "scan exited nonzero"
   assert_equals "" "$(remote_sha)" "a working task was pushed"
-  [ ! -e "$HOME_DIR/state/$ID.pause-push" ] || fail "a working task got a pause-push record"
+  assert_equals idle "$(record outcome)" "a working task was not recorded as examined"
+
+  local examined
+  examined=$(cat "$HOME_DIR/state/$ID.pause-push")
+  run_scan >/dev/null || fail "unchanged working scan failed"
+  assert_equals "$examined" "$(cat "$HOME_DIR/state/$ID.pause-push")" "unchanged working task was recorded again"
 
   declare_status 'paused [at=2]: waiting on CI'
   out=$(run_scan) || fail "scan exited nonzero"
@@ -238,6 +243,7 @@ test_idle_watcher_never_spawns_pause_scanner() {
   for mode in working deferred; do
     make_task "idle-watcher-$mode"
     declare_status 'working [at=1]: building'
+    run_scan >/dev/null || fail "initial working scan failed"
     if [ "$mode" = deferred ]; then
       declare_status 'paused [at=2]: waiting on validation'
       FM_FAKE_CREW_STATE=working run_scan >/dev/null || fail "initial deferral failed"
@@ -274,36 +280,42 @@ SH
 }
 
 test_watcher_poll_pushes_and_wakes() {
-  local pid i out
-  make_task watcher
-  printf 'scratch\n' > "$WT/notes.txt"
-  declare_status 'paused [at=9]: waiting'
-  FM_FAKE_CREW_STATE=working run_scan >/dev/null || fail "initial deferral failed"
-  sed -i.bak "s/^at=.*/at=$(( $(record at) - 301))/" "$HOME_DIR/state/$ID.pause-push"
-  [ "$HOME_DIR/state/$ID.status" -nt "$HOME_DIR/state/$ID.pause-push" ] && fail "record must be newer than status for deferred retry"
-  FM_STATE_OVERRIDE="$HOME_DIR/state" bash -c '. "$1"; fm_wake_status_mark_current "$2" "$3"' \
-    _ "$ROOT/bin/fm-wake-lib.sh" "$HOME_DIR/state" "$HOME_DIR/state/$ID.status"
-  mkdir -p "$WORLD/fakebin"
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$WORLD/fakebin/tmux"
-  chmod +x "$WORLD/fakebin"/*
-  out="$WORLD/watch.out"
-  PATH="$WORLD/fakebin:$PATH" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$HOME_DIR/state" \
-    FM_CONFIG_OVERRIDE="$HOME_DIR/config" FM_INACTIVE_CREW_STATE_BIN="$WORLD/fakebin/fm-crew-state.sh" \
-    FM_PAUSE_PUSH_CREW_STATE_BIN="$WORLD/fakebin/fm-crew-state.sh" \
-    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
-    "$WATCH" > "$out" 2>&1 &
-  pid=$!
-  i=0
-  while [ "$i" -lt 100 ]; do
-    kill -0 "$pid" 2>/dev/null || break
-    sleep 0.1
-    i=$((i + 1))
+  local pid i out mode
+  for mode in working deferred; do
+    make_task "watcher-$mode"
+    printf 'scratch\n' > "$WT/notes.txt"
+    declare_status 'working [at=1]: building'
+    run_scan >/dev/null || fail "initial working scan failed"
+    declare_status 'paused [at=9]: waiting'
+    if [ "$mode" = deferred ]; then
+      FM_FAKE_CREW_STATE=working run_scan >/dev/null || fail "initial deferral failed"
+      sed -i.bak "s/^at=.*/at=$(( $(record at) - 301))/" "$HOME_DIR/state/$ID.pause-push"
+      [ "$HOME_DIR/state/$ID.status" -nt "$HOME_DIR/state/$ID.pause-push" ] && fail "record must be newer than status for deferred retry"
+    fi
+    FM_STATE_OVERRIDE="$HOME_DIR/state" bash -c '. "$1"; fm_wake_status_mark_current "$2" "$3"' \
+      _ "$ROOT/bin/fm-wake-lib.sh" "$HOME_DIR/state" "$HOME_DIR/state/$ID.status"
+    mkdir -p "$WORLD/fakebin"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$WORLD/fakebin/tmux"
+    chmod +x "$WORLD/fakebin"/*
+    out="$WORLD/watch.out"
+    PATH="$WORLD/fakebin:$PATH" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$HOME_DIR/state" \
+      FM_CONFIG_OVERRIDE="$HOME_DIR/config" FM_INACTIVE_CREW_STATE_BIN="$WORLD/fakebin/fm-crew-state.sh" \
+      FM_PAUSE_PUSH_CREW_STATE_BIN="$WORLD/fakebin/fm-crew-state.sh" \
+      FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+      "$WATCH" > "$out" 2>&1 &
+    pid=$!
+    i=0
+    while [ "$i" -lt 100 ]; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.1
+      i=$((i + 1))
+    done
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    assert_equals "$(git -C "$WT" rev-parse HEAD)" "$(remote_sha)" "the watcher poll did not push the paused branch"
+    grep -Fxq 'check: pause-push' "$out" || fail "the watcher did not wake on the dirty pause: $(cat "$out")"
+    assert_equals 1 "$(wake_rows)" "the watcher wake has no durable queue row"
   done
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
-  assert_equals "$(git -C "$WT" rev-parse HEAD)" "$(remote_sha)" "the watcher poll did not push the paused branch"
-  grep -Fxq 'check: pause-push' "$out" || fail "the watcher did not wake on the dirty pause: $(cat "$out")"
-  assert_equals 1 "$(wake_rows)" "the watcher wake has no durable queue row"
   pass "the real watcher poll pushes a paused branch and wakes firstmate on a dirty copy"
 }
 

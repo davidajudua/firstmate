@@ -3765,7 +3765,6 @@ while :; do
   for pause_push_meta in "$STATE"/*.meta; do
     [ -f "$pause_push_meta" ] || continue
     pause_push_status=${pause_push_meta%.meta}.status
-    status_is_paused "$(status_declared_wait_line "$pause_push_status")" || continue
     pause_push_record=${pause_push_meta%.meta}.pause-push
     if [ ! -f "$pause_push_record" ] || [ "$pause_push_status" -nt "$pause_push_record" ]; then
       pause_push_due=1
@@ -3780,7 +3779,8 @@ while :; do
     done < "$pause_push_record"
     if [ "$pause_push_outcome" = deferred ]; then
       case "$pause_push_at" in ''|*[!0-9]*) pause_push_at=0 ;; esac
-      if [ "$(( $(date +%s) - pause_push_at ))" -ge "$pause_push_retry" ]; then
+      printf -v pause_push_now '%(%s)T' -1
+      if [ "$((pause_push_now - pause_push_at))" -ge "$pause_push_retry" ]; then
         pause_push_due=1
         break
       fi

@@ -9,7 +9,8 @@
 # `git push origin refs/heads/<branch>:refs/heads/<branch>` of its existing task
 # branch, so paused work also lives on the remote while the worker waits.
 # `scan` visits every task record in this home and attempts each paused line
-# once; bin/fm-watch.sh runs it only when a paused task is due.
+# once; bin/fm-watch.sh runs it only for changed or unexamined status files
+# or expired deferrals. Unchanged tasks are not reexamined.
 # Transient current-state deferrals retry after FM_PAUSE_PUSH_RETRY_SECS
 # (default 300), without consuming the paused line.
 #
@@ -35,11 +36,11 @@
 # origin remote, or firstmate's own repository without publication authority
 # (fm_role_gate_self_publish in bin/fm-role-lib.sh) - is reported as not-pushed.
 #
-# Each attempt replaces state/<id>.pause-push with key=value lines:
+# Each examined task writes or touches state/<id>.pause-push with key=value lines:
 #   line=<cksum of the paused line>  outcome=<outcome>  branch=<branch>
 #   head=<sha>  dirty=<count>  at=<epoch>  detail=<text>
 # where outcome is one of skipped, pushed, up-to-date, behind, rejected,
-# failed, not-pushed, or deferred. A rejected, failed, or not-pushed outcome, or any
+# failed, not-pushed, idle, or deferred. A rejected, failed, or not-pushed outcome, or any
 # dirty file, appends one `check: pause-push <id> ...` wake row keyed
 # pause-push:<id>:<line> and prints `actionable: <payload>`; the watcher wakes
 # firstmate on that output. bin/fm-teardown.sh removes the record.
@@ -116,12 +117,30 @@ attempt() {  # <id>
   local id=$1 meta="$STATE/$1.meta" status="$STATE/$1.status"
   local line hash kind mode forge wt state branch current default dirty_raw dirty_count=0
   local dirty_list='' head='' outcome detail out rc payload deferred_at
+  local record="$STATE/$1.pause-push"
   [ -f "$meta" ] || return 0
+  if [ -f "$record" ] && [ ! "$status" -nt "$record" ]; then
+    [ "$(record_value "$record" outcome)" = deferred ] || return 0
+    deferred_at=$(record_value "$record" at)
+    case "$deferred_at" in ''|*[!0-9]*) deferred_at=0 ;; esac
+    [ "$(( $(date +%s) - deferred_at ))" -ge "$PAUSE_PUSH_RETRY" ] || return 0
+  fi
   line=$(status_declared_wait_line "$status")
-  status_is_paused "$line" || return 0
+  if ! status_is_paused "$line"; then
+    if [ -f "$record" ] && [ "$(record_value "$record" outcome)" != deferred ]; then
+      touch -- "$record"
+    else
+      hash=$(printf '%s' "$line" | cksum | cut -d' ' -f1)
+      write_record "$id" "$hash" idle "" "" 0 "declared wait is not paused"
+    fi
+    return 0
+  fi
   hash=$(printf '%s' "$line" | cksum | cut -d' ' -f1)
   if [ "$(record_value "$STATE/$id.pause-push" line)" = "$hash" ]; then
-    [ "$(record_value "$STATE/$id.pause-push" outcome)" = deferred ] || return 0
+    if [ "$(record_value "$STATE/$id.pause-push" outcome)" != deferred ]; then
+      touch -- "$record"
+      return 0
+    fi
     deferred_at=$(record_value "$STATE/$id.pause-push" at)
     case "$deferred_at" in ''|*[!0-9]*) deferred_at=0 ;; esac
     [ "$(( $(date +%s) - deferred_at ))" -ge "$PAUSE_PUSH_RETRY" ] || return 0
