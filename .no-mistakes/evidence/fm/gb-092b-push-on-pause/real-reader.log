@@ -1,0 +1,4 @@
+Real crew-state response for a task without a registered live endpoint:
+state: unknown · source: none · backend target gone: firstmate:fm-real-reader
+Invoking real pause scan with real crew-state reader:
+Remote task branch remains absent; pause remains eligible for a later scan.

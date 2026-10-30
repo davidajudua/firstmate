@@ -1,0 +1,88 @@
+
+branch-diverged stderr
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 3s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REFUSED: worktree /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/branch-diverged/wt has work ahead of origin/fm/task-x1 or diverged from it.
+Push the branch, land its PR, or get the captain's explicit OK to discard, then --force.
+
+branch-diverged stdout
+
+branch-landed-deleted stderr
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 4s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+teardown: fetch of origin/fm/task-x1 failed or timed out; using cached ref
+
+branch-landed-deleted stdout
+/home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/branch-landed-deleted/project: synced 5977366..a17473a
+teardown task-x1 complete (window firstmate:fm-task-x1, worktree /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/branch-landed-deleted/wt)
+Backlog: task-x1 just finished (this home keeps no markdown backlog at /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/branch-landed-deleted/data/backlog.md). Update /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/branch-landed-deleted/data/backlog.md - move task-x1 to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due.
+
+branch-offline stderr
+
+branch-offline stdout
+
+branch-other-remote stderr
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 3s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REFUSED: worktree /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/branch-other-remote/wt has work ahead of origin/fm/task-x1 or diverged from it.
+Push the branch, land its PR, or get the captain's explicit OK to discard, then --force.
+
+branch-other-remote stdout
+
+nm-ahead stderr
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 4s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REFUSED: worktree /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/nm-ahead/wt has work not on any remote and not landed.
+unpushed commits:
+6d473d9 work after the push
+Push the branch, land its PR, or get the captain's explicit OK to discard, then --force.
+
+nm-ahead stdout
+
+nm-unpushed stderr
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 3s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REFUSED: worktree /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/nm-unpushed/wt has work not on any remote and not landed.
+unpushed commits:
+ad88441 unpushed work
+Push the branch, land its PR, or get the captain's explicit OK to discard, then --force.
+
+nm-unpushed stdout
+
+opencode-busy-wiring stderr
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no live watcher process holds this home lock (last beat: 2s ago).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+opencode-busy-wiring stdout
+teardown task-x1 complete (window firstmate:fm-task-x1, worktree /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/opencode-busy-wiring/wt)
+Backlog: task-x1 just finished (this home keeps no markdown backlog at /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/opencode-busy-wiring/data/backlog.md). Update /home/david/.no-mistakes/evidence/01M661V98Z7P30AR17K05JVK2G/tmp/fm-teardown-tests.C0GY4M/opencode-busy-wiring/data/backlog.md - move task-x1 to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due.

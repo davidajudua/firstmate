@@ -1,0 +1,5 @@
+ok - teardown leaves opencode's busy plugin in the returned pool worktree as on main
+ok - no-mistakes worktree with genuinely unlanded work is refused (safety preserved)
+ok - no-mistakes worktree whose branch is ahead of its pushed remote branch is refused
+ok - recorded branches require their own refreshed origin ref or landed work, with reported offline fallback
+ok - dirty worktree is refused even when its committed work has landed (dirty always wins)

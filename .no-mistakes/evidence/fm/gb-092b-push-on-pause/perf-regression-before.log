@@ -1,0 +1,2 @@
+1..1
+not ok - transient state should defer the pause (expected 'deferred', got '')

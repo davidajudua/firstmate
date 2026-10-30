@@ -1,0 +1,10 @@
+1..8
+ok - a paused task's branch is pushed without a commit and dirty files are reported, not touched
+ok - a clean paused push is silent and a working task is never pushed
+ok - a rejected push is reported and the diverged remote branch is left untouched
+ok - a copy whose HEAD origin already contains reads behind and stays quiet
+ok - local-only, scout, branchless, and non-checkout records are never pushed, and a detached ship copy is reported
+ok - a paused line written during an active pipeline run leaves the push to the pipeline
+ok - a failed push is reported once and later scans do not retry it
+ok - the real watcher poll pushes a paused branch and wakes firstmate on a dirty copy
+FM_TEST_COMPLETE
