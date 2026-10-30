@@ -2108,7 +2108,7 @@ teardown_note_dirty_return() {
 }
 
 validate_worktree_teardown_safety() {
-  local dirty_raw dirty unpushed_raw unpushed DEFAULT unmerged_raw unmerged branch
+  local dirty_raw dirty unpushed_raw unpushed DEFAULT unmerged_raw unmerged branch remote_ref fetch_note reason
   [ -d "$WT" ] || return 0
   [ "$FORCE" != "--force" ] || return 0
   case "$KIND" in
@@ -2124,6 +2124,30 @@ validate_worktree_teardown_safety() {
     return 1
   fi
   dirty=$(printf '%s\n' "$dirty_raw" | grep -vE '^\?\? (\.claude/|\.fm-(grok|kimi)-turnend$)' || true)
+
+  branch=$(grep '^branch=' "$META" | cut -d= -f2- || true)
+  if [ "$MODE" != local-only ] && [ -n "$branch" ] && [ -z "$dirty" ]; then
+    remote_ref="refs/remotes/origin/$branch"
+    fetch_note=
+    if ! fm_run_timed 10 env GIT_TERMINAL_PROMPT=0 git -C "$WT" fetch --quiet --no-tags origin \
+      "+refs/heads/$branch:$remote_ref" >/dev/null 2>&1; then
+      fetch_note="fetch of origin/$branch failed or timed out; using cached ref"
+      printf 'teardown: %s\n' "$fetch_note" >&2
+    fi
+    if ! git -C "$WT" merge-base --is-ancestor HEAD "$remote_ref" 2>/dev/null; then
+      if ! work_is_landed "$branch"; then
+        if git -C "$WT" rev-parse --verify --quiet "$remote_ref" >/dev/null; then
+          reason="ahead of origin/$branch or diverged from it"
+        else
+          reason="no remote branch origin/$branch"
+        fi
+        printf 'REFUSED: worktree %s has work %s.\n' "$WT" "$reason" >&2
+        [ -z "${CONTENT_LANDED_PROOF_ERROR:-}" ] || printf 'content-landed proof unavailable: %s\n' "$CONTENT_LANDED_PROOF_ERROR" >&2
+        echo "Push the branch, land its PR, or get the captain's explicit OK to discard, then --force." >&2
+        return 1
+      fi
+    fi
+  fi
 
   if ! unpushed_raw=$(git -C "$WT" log --oneline HEAD --not --remotes -- 2>/dev/null); then
     if worktree_safety_blocked_by_lock "commits not on a remote"; then

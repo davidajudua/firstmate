@@ -137,7 +137,6 @@ attempt() {  # <id> <force>
   case "$state" in
     'state: paused '*) ;;
     *)
-      write_record "$id" "$hash" skipped "" "" 0 "current state is not paused: ${state:-unreadable}"
       return 0
       ;;
   esac

@@ -202,7 +202,9 @@ test_active_pipeline_run_is_never_pushed() {
   declare_status 'paused [at=10]: waiting on my no-mistakes run'
   out=$(FM_FAKE_CREW_STATE='working · source: run-step · fixing' run_scan) || fail "scan exited nonzero"
   assert_equals "" "$(remote_sha)" "a task with an active pipeline run was pushed"
-  assert_equals skipped "$(record outcome)" "active pipeline record outcome"
+  [ ! -e "$HOME_DIR/state/$ID.pause-push" ] || fail "transient state consumed the pause"
+  run_scan >/dev/null || fail "later scan failed"
+  assert_equals "$(git -C "$WT" rev-parse HEAD)" "$(remote_sha)" "later paused read was not retried"
   assert_equals "" "$out" "an active pipeline skip woke firstmate"
   pass "a paused line written during an active pipeline run leaves the push to the pipeline"
 }

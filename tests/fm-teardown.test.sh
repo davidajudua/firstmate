@@ -961,6 +961,49 @@ test_no_mistakes_ahead_of_remote_refuses() {
   pass "no-mistakes worktree whose branch is ahead of its pushed remote branch is refused"
 }
 
+test_recorded_branch_preservation() {
+  local scenario case_dir rc base
+  for scenario in other-remote diverged landed-deleted offline; do
+    case_dir=$(make_case "branch-$scenario")
+    write_meta "$case_dir" no-mistakes ship
+    printf 'branch=fm/task-x1\n' >> "$case_dir/state/task-x1.meta"
+    base=$(git -C "$case_dir/wt" rev-parse HEAD)
+    git -C "$case_dir/wt" push -q origin fm/task-x1
+    wt_commit_file "$case_dir" feature.txt hello "task work"
+    case "$scenario" in
+      other-remote)
+        git -C "$case_dir/wt" push -q origin HEAD:refs/heads/other
+        ;;
+      diverged)
+        git -C "$case_dir/wt" push -q origin fm/task-x1
+        git -C "$case_dir/origin.git" update-ref refs/heads/fm/task-x1 "$base"
+        ;;
+      landed-deleted)
+        git -C "$case_dir/wt" push -q origin HEAD:refs/heads/main
+        git -C "$case_dir/origin.git" update-ref -d refs/heads/fm/task-x1
+        ;;
+      offline)
+        git -C "$case_dir/wt" push -q origin fm/task-x1
+        git -C "$case_dir/wt" remote set-url origin "$case_dir/missing.git"
+        ;;
+    esac
+    rc=0
+    run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || rc=$?
+    case "$scenario" in
+      other-remote|diverged)
+        expect_code 1 "$rc" "$scenario must refuse"
+        grep -q 'ahead of origin/fm/task-x1' "$case_dir/stderr" || fail "$scenario missing branch-specific refusal"
+        [ -e "$case_dir/state/task-x1.meta" ] || fail "$scenario removed task"
+        ;;
+      *) expect_code 0 "$rc" "$scenario must allow" ;;
+    esac
+    if [ "$scenario" = offline ]; then
+      grep -q 'using cached ref' "$case_dir/stderr" || fail "offline fallback not reported"
+    fi
+  done
+  pass "recorded branches require their own refreshed origin ref or landed work, with reported offline fallback"
+}
+
 test_squash_merged_branch_deleted_allows() {
   local case_dir rc pr_head
   case_dir=$(make_case squash-merged)
@@ -6027,6 +6070,7 @@ test_teardown_retains_journal_bound_to_another_pane
 test_teardown_retires_v1_journal_when_projected_workspace_gone
 test_teardown_retains_v1_journal_when_projected_workspace_present
 test_teardown_retains_v1_journal_when_workspace_query_ambiguous
+test_recorded_branch_preservation
 test_squash_merged_branch_deleted_allows
 test_squash_merged_pr_allows_when_head_ancestor_of_pr_head
 test_no_pr_recorded_discovers_merged_pr_by_branch_allows
