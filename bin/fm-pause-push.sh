@@ -8,9 +8,10 @@
 # and status_is_paused in bin/fm-classify-lib.sh own that reading) gets one plain
 # `git push origin refs/heads/<branch>:refs/heads/<branch>` of its existing task
 # branch, so paused work also lives on the remote while the worker waits.
-# `scan` visits every task record in this home and attempts each paused line
-# once; bin/fm-watch.sh runs it only for changed or unexamined status files
-# or expired deferrals. Unchanged tasks are not reexamined.
+# `scan` checks each task record in this home for a changed or unexamined status
+# file or an expired deferral, and attempts each paused line once.
+# bin/fm-watch.sh starts it only when at least one task is due.
+# Unchanged tasks without an expired deferral are not reexamined.
 # Transient current-state deferrals retry after FM_PAUSE_PUSH_RETRY_SECS
 # (default 300), without consuming the paused line.
 #
@@ -37,7 +38,7 @@
 # (fm_role_gate_self_publish in bin/fm-role-lib.sh) - is reported as not-pushed.
 #
 # Each examined task writes or touches state/<id>.pause-push with key=value lines:
-#   line=<cksum of the paused line>  outcome=<outcome>  branch=<branch>
+#   line=<cksum of the declared wait line>  outcome=<outcome>  branch=<branch>
 #   head=<sha>  dirty=<count>  at=<epoch>  detail=<text>
 # where outcome is one of skipped, pushed, up-to-date, behind, rejected,
 # failed, not-pushed, idle, or deferred. A rejected, failed, or not-pushed outcome, or any

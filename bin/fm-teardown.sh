@@ -43,8 +43,8 @@
 # that closes the call.
 # REFUSES if the worktree holds work that has not LANDED, because cleanup
 # hard-resets/removes the worktree and kills its processes. Work has landed when it is
-# reachable from any remote-tracking branch (a fork counts as a remote, so
-# upstream-contribution PRs pushed to a fork satisfy this in any mode), OR - for a
+# reachable from a remote-tracking branch, subject to the recorded-branch check
+# below, OR - for a
 # normal ship task whose commits are not so reachable - when its PR is merged and
 # GitHub reports a PR head that contains the current local work, or its content is
 # already present in the up-to-date default branch. This recognizes the common
@@ -52,6 +52,13 @@
 # on a remote yet the change is fully in main. A task whose meta records
 # base_branch= (bin/fm-spawn.sh) runs that content check against origin's copy of
 # its base branch instead of the default branch.
+# A non-local-only ship with a recorded branch must also have HEAD contained in
+# origin/<branch>, or pass the merged-PR or content-landed proof above.
+# A copy on another remote branch alone does not satisfy this check.
+# Teardown refreshes the recorded origin branch with a bounded fetch; if the
+# fetch fails or times out, it reports the failure and uses the cached ref.
+# Missing, ahead, or diverged origin branches refuse cleanup unless work is
+# proven landed. tests/fm-teardown.test.sh covers these preservation checks.
 # Squash merges collapse the branch's commits, so per-commit patch ids against main
 # no longer match, and a pipeline rebase can leave the local worktree diverged from
 # the PR head. A diverged copy is not treated as landed: path-set coverage, git
