@@ -45,6 +45,7 @@ make_crew_state() {
   mkdir -p "$WORLD/fakebin"
   cat > "$WORLD/fakebin/fm-crew-state.sh" <<'SH'
 #!/usr/bin/env bash
+[ -z "${FM_FAKE_CREW_READS:-}" ] || printf 'read\n' >> "$FM_FAKE_CREW_READS"
 printf 'state: %s · source: fake\n' "${FM_FAKE_CREW_STATE:-paused}"
 SH
   chmod +x "$WORLD/fakebin/fm-crew-state.sh"
@@ -197,12 +198,18 @@ test_ineligible_tasks_are_never_pushed() {
 }
 
 test_active_pipeline_run_is_never_pushed() {
-  local out
+  local out at
   make_task pipeline
   declare_status 'paused [at=10]: waiting on my no-mistakes run'
   out=$(FM_FAKE_CREW_STATE='working · source: run-step · fixing' run_scan) || fail "scan exited nonzero"
   assert_equals "" "$(remote_sha)" "a task with an active pipeline run was pushed"
-  [ ! -e "$HOME_DIR/state/$ID.pause-push" ] || fail "transient state consumed the pause"
+  assert_equals deferred "$(record outcome)" "transient state should defer the pause"
+  at=$(record at)
+  case "$at" in ''|*[!0-9]*) fail "deferral timestamp is not an epoch" ;; esac
+  FM_FAKE_CREW_READS="$WORLD/reads" run_scan >/dev/null || fail "early scan failed"
+  [ ! -e "$WORLD/reads" ] || fail "deferral reread state before default retry interval"
+  assert_equals "" "$(remote_sha)" "deferral pushed before retry interval"
+  sed -i.bak "s/^at=.*/at=$((at - 301))/" "$HOME_DIR/state/$ID.pause-push"
   run_scan >/dev/null || fail "later scan failed"
   assert_equals "$(git -C "$WT" rev-parse HEAD)" "$(remote_sha)" "later paused read was not retried"
   assert_equals "" "$out" "an active pipeline skip woke firstmate"
@@ -226,11 +233,54 @@ test_failed_push_is_reported_once() {
   pass "a failed push is reported once and later scans do not retry it"
 }
 
+test_idle_watcher_never_spawns_pause_scanner() {
+  local pid i mode
+  for mode in working deferred; do
+    make_task "idle-watcher-$mode"
+    declare_status 'working [at=1]: building'
+    if [ "$mode" = deferred ]; then
+      declare_status 'paused [at=2]: waiting on validation'
+      FM_FAKE_CREW_STATE=working run_scan >/dev/null || fail "initial deferral failed"
+    fi
+    FM_STATE_OVERRIDE="$HOME_DIR/state" bash -c '. "$1"; fm_wake_status_mark_current "$2" "$3"' \
+      _ "$ROOT/bin/fm-wake-lib.sh" "$HOME_DIR/state" "$HOME_DIR/state/$ID.status"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$WORLD/fakebin/tmux"
+    chmod +x "$WORLD/fakebin/tmux"
+    cat > "$WORLD/bash-env" <<'SH'
+case "$0" in
+  */fm-pause-push.sh) printf 'scan\n' >> "$FM_SCAN_LOG" ;;
+  */fm-inactive-reconcile.sh) [ "${1:-}" != scan ] || printf 'poll\n' >> "$FM_POLL_LOG" ;;
+esac
+SH
+    PATH="$WORLD/fakebin:$PATH" BASH_ENV="$WORLD/bash-env" FM_SCAN_LOG="$WORLD/scans" \
+      FM_POLL_LOG="$WORLD/polls" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$HOME_DIR/state" \
+      FM_CONFIG_OVERRIDE="$HOME_DIR/config" FM_INACTIVE_CREW_STATE_BIN="$WORLD/fakebin/fm-crew-state.sh" \
+      FM_POLL=1 FM_SIGNAL_GRACE=999999 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+      "$WATCH" > "$WORLD/watch.out" 2>&1 &
+    pid=$!
+    i=0
+    while [ "$i" -lt 200 ]; do
+      [ ! -f "$WORLD/polls" ] || [ "$(wc -l < "$WORLD/polls")" -lt 2 ] || break
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.1
+      i=$((i + 1))
+    done
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    [ -f "$WORLD/polls" ] && [ "$(wc -l < "$WORLD/polls")" -ge 2 ] || fail "watcher did not execute two idle polls"
+    [ ! -e "$WORLD/scans" ] || fail "idle watcher spawned the pause scanner"
+  done
+  pass "idle watcher polls and nonexpired deferrals never spawn the pause scanner"
+}
+
 test_watcher_poll_pushes_and_wakes() {
   local pid i out
   make_task watcher
   printf 'scratch\n' > "$WT/notes.txt"
   declare_status 'paused [at=9]: waiting'
+  FM_FAKE_CREW_STATE=working run_scan >/dev/null || fail "initial deferral failed"
+  sed -i.bak "s/^at=.*/at=$(( $(record at) - 301))/" "$HOME_DIR/state/$ID.pause-push"
+  [ "$HOME_DIR/state/$ID.status" -nt "$HOME_DIR/state/$ID.pause-push" ] && fail "record must be newer than status for deferred retry"
   FM_STATE_OVERRIDE="$HOME_DIR/state" bash -c '. "$1"; fm_wake_status_mark_current "$2" "$3"' \
     _ "$ROOT/bin/fm-wake-lib.sh" "$HOME_DIR/state" "$HOME_DIR/state/$ID.status"
   mkdir -p "$WORLD/fakebin"
@@ -258,6 +308,7 @@ test_watcher_poll_pushes_and_wakes() {
 }
 
 fm_test_run \
+  test_idle_watcher_never_spawns_pause_scanner \
   test_pause_pushes_branch_and_reports_dirty_files \
   test_clean_pause_push_is_silent_and_skips_non_paused_tasks \
   test_rejected_push_is_reported_and_remote_untouched \

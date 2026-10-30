@@ -3757,17 +3757,45 @@ while :; do
     triage_log "inactive-outcome reconciliation unavailable"
   fi
 
-  # A newly paused ship task's branch is pushed to its origin once per paused
-  # line; bin/fm-pause-push.sh owns eligibility, the bounded push, and which
-  # results queue a wake. Quiet unless a push was refused or files were dirty.
-  pause_push_out=
-  if pause_push_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_CONFIG_OVERRIDE="$CONFIG" \
-    "$SCRIPT_DIR/fm-pause-push.sh" scan 2>/dev/null); then
-    if [ -n "$pause_push_out" ]; then
-      wake "check: pause-push"
+  # Avoid starting the scanner on idle polls; deferred pauses become due again
+  # after the scanner's retry interval without consuming their paused line.
+  pause_push_due=0
+  pause_push_retry=${FM_PAUSE_PUSH_RETRY_SECS:-300}
+  case "$pause_push_retry" in ''|*[!0-9]*) pause_push_retry=300 ;; esac
+  for pause_push_meta in "$STATE"/*.meta; do
+    [ -f "$pause_push_meta" ] || continue
+    pause_push_status=${pause_push_meta%.meta}.status
+    status_is_paused "$(status_declared_wait_line "$pause_push_status")" || continue
+    pause_push_record=${pause_push_meta%.meta}.pause-push
+    if [ ! -f "$pause_push_record" ] || [ "$pause_push_status" -nt "$pause_push_record" ]; then
+      pause_push_due=1
+      break
     fi
-  else
-    triage_log "pause-push scan unavailable"
+    pause_push_outcome= pause_push_at=0
+    while IFS='=' read -r pause_push_key pause_push_value; do
+      case "$pause_push_key" in
+        outcome) pause_push_outcome=$pause_push_value ;;
+        at) pause_push_at=$pause_push_value ;;
+      esac
+    done < "$pause_push_record"
+    if [ "$pause_push_outcome" = deferred ]; then
+      case "$pause_push_at" in ''|*[!0-9]*) pause_push_at=0 ;; esac
+      if [ "$(( $(date +%s) - pause_push_at ))" -ge "$pause_push_retry" ]; then
+        pause_push_due=1
+        break
+      fi
+    fi
+  done
+  if [ "$pause_push_due" -eq 1 ]; then
+    pause_push_out=
+    if pause_push_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_CONFIG_OVERRIDE="$CONFIG" \
+      "$SCRIPT_DIR/fm-pause-push.sh" scan 2>/dev/null); then
+      if [ -n "$pause_push_out" ]; then
+        wake "check: pause-push"
+      fi
+    else
+      triage_log "pause-push scan unavailable"
+    fi
   fi
 
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).

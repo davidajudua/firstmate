@@ -9,7 +9,9 @@
 # `git push origin refs/heads/<branch>:refs/heads/<branch>` of its existing task
 # branch, so paused work also lives on the remote while the worker waits.
 # `scan` visits every task record in this home and attempts each paused line
-# once; bin/fm-watch.sh runs it every poll.
+# once; bin/fm-watch.sh runs it only when a paused task is due.
+# Transient current-state deferrals retry after FM_PAUSE_PUSH_RETRY_SECS
+# (default 300), without consuming the paused line.
 #
 # The push never forces, never deletes a ref, never creates a commit, never
 # opens a pull request, and never targets the project's default branch.
@@ -37,7 +39,7 @@
 #   line=<cksum of the paused line>  outcome=<outcome>  branch=<branch>
 #   head=<sha>  dirty=<count>  at=<epoch>  detail=<text>
 # where outcome is one of skipped, pushed, up-to-date, behind, rejected,
-# failed, or not-pushed. A rejected, failed, or not-pushed outcome, or any
+# failed, not-pushed, or deferred. A rejected, failed, or not-pushed outcome, or any
 # dirty file, appends one `check: pause-push <id> ...` wake row keyed
 # pause-push:<id>:<line> and prints `actionable: <payload>`; the watcher wakes
 # firstmate on that output. bin/fm-teardown.sh removes the record.
@@ -63,6 +65,9 @@ CREW_STATE_BIN="${FM_PAUSE_PUSH_CREW_STATE_BIN:-$FM_CREW_STATE_BIN}"
 PAUSE_PUSH_TIMEOUT=${FM_PAUSE_PUSH_TIMEOUT_SECS:-30}
 case "$PAUSE_PUSH_TIMEOUT" in ''|*[!0-9]*|0) PAUSE_PUSH_TIMEOUT=30 ;; esac
 [ "$PAUSE_PUSH_TIMEOUT" -le 300 ] || PAUSE_PUSH_TIMEOUT=300
+
+PAUSE_PUSH_RETRY=${FM_PAUSE_PUSH_RETRY_SECS:-300}
+case "$PAUSE_PUSH_RETRY" in ''|*[!0-9]*) PAUSE_PUSH_RETRY=300 ;; esac
 
 usage() {
   printf 'usage: fm-pause-push.sh scan\n' >&2
@@ -110,13 +115,16 @@ default_branch() {  # <worktree>
 attempt() {  # <id>
   local id=$1 meta="$STATE/$1.meta" status="$STATE/$1.status"
   local line hash kind mode forge wt state branch current default dirty_raw dirty_count=0
-  local dirty_list='' head='' outcome detail out rc payload
+  local dirty_list='' head='' outcome detail out rc payload deferred_at
   [ -f "$meta" ] || return 0
   line=$(status_declared_wait_line "$status")
   status_is_paused "$line" || return 0
   hash=$(printf '%s' "$line" | cksum | cut -d' ' -f1)
   if [ "$(record_value "$STATE/$id.pause-push" line)" = "$hash" ]; then
-    return 0
+    [ "$(record_value "$STATE/$id.pause-push" outcome)" = deferred ] || return 0
+    deferred_at=$(record_value "$STATE/$id.pause-push" at)
+    case "$deferred_at" in ''|*[!0-9]*) deferred_at=0 ;; esac
+    [ "$(( $(date +%s) - deferred_at ))" -ge "$PAUSE_PUSH_RETRY" ] || return 0
   fi
 
   kind=$(meta_value "$meta" kind)
@@ -135,6 +143,7 @@ attempt() {  # <id>
   case "$state" in
     'state: paused '*) ;;
     *)
+      write_record "$id" "$hash" deferred "$branch" "" 0 "current state is not paused or unavailable"
       return 0
       ;;
   esac
