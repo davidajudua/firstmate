@@ -18,6 +18,10 @@
 # with the enclosing repo left untouched, in both the whole-fleet and
 # single-project forms, while a symlinked clone dir still syncs.
 #
+# It also pins gone-branch pruning: a branch whose remote branch was deleted is
+# pruned only when its tip was pushed (a squash-merged branch still prunes), while
+# a branch with a commit made after its last push is kept and reported.
+#
 # It also pins the orphaned .git/packed-refs.lock recovery in the fetch step
 # (fetch_with_packed_refs_lock_guard, backed by bin/fm-lock-lib.sh's shared
 # staleness proof): a provably-stale lock is retried then removed and the clone
@@ -726,6 +730,42 @@ SH
   pass "the clone-root guard accepts a root named by a different spelling of the same directory"
 }
 
+test_gone_branch_prune_keeps_unpushed_commits() {
+  local home clone work out
+  home=$(new_home)
+  clone=$(build_pair "$home" upsilon)
+  work="$home/work-upsilon"
+
+  git -C "$clone" checkout -q -b landed
+  commit_file "$clone" landed.txt v1 L1
+  git -C "$clone" push -q -u origin landed
+  git -C "$clone" checkout -q -b unpushed main
+  commit_file "$clone" unpushed.txt v1 U1
+  git -C "$clone" push -q -u origin unpushed
+  commit_file "$clone" unpushed.txt v2 "U2 after last push"
+  git -C "$clone" checkout -q main
+
+  # Squash-merge `landed` so its tip is reachable from no remote ref, then
+  # delete both remote branches the way a merged PR's branch is deleted.
+  git -C "$work" fetch -q origin landed
+  git -C "$work" merge -q --squash FETCH_HEAD >/dev/null
+  git -C "$work" commit -qm "squash landed"
+  git -C "$work" push -q origin main
+  git -C "$work" push -q origin --delete landed unpushed
+
+  out=$(run_sync "$home" upsilon)
+
+  assert_contains "$out" "upsilon: pruned landed" \
+    "a gone branch whose tip was fully pushed must still prune after a squash merge"
+  git -C "$clone" rev-parse --verify --quiet refs/heads/landed >/dev/null && \
+    fail "the fully pushed gone branch still exists"
+  assert_contains "$out" "upsilon: kept unpushed" \
+    "a gone branch with commits after its last push must be reported as kept"
+  [ "$(git -C "$clone" log -1 --format=%s unpushed 2>/dev/null)" = "U2 after last push" ] || \
+    fail "the gone branch's unpushed commit was deleted"
+  pass "gone-branch pruning keeps unpushed commits and still prunes a fully pushed branch"
+}
+
 test_non_signature_fetch_failure_is_not_retried() {
   local home fakebin clone out err
   home=$(new_home)
@@ -770,6 +810,7 @@ test_live_packed_refs_lock_is_never_removed
 test_live_git_cwd_in_clone_dir_blocks_removal
 test_transient_packed_refs_lock_self_clears
 test_non_signature_fetch_failure_is_not_retried
+test_gone_branch_prune_keeps_unpushed_commits
 test_non_clone_dir_never_syncs_the_enclosing_repo
 test_non_clone_dir_named_directly_never_syncs_the_enclosing_repo
 test_symlinked_clone_still_syncs
