@@ -1,0 +1,25 @@
+Before sync (remote branches deleted, local tracking refs still present):
+fully-pushed 71496ec [origin/fully-pushed] fully pushed work
+* main         8e78a08 [origin/main] squash
+  unpushed     6e64a62 [origin/unpushed: ahead 1] commit after last push
+Fully pushed tip is absent from current remote main: True
+
+First actual fleet-sync invocation:
+demo: pruned fully-pushed
+demo: kept unpushed: upstream gone but its tip is not proven pushed (it may hold unpushed commits)
+demo: already current
+Persisted branches:
+* main     8e78a08 [origin/main] squash
+  unpushed 6e64a62 [origin/unpushed: gone] commit after last push
+Preserved commit: 6e64a62488b96b8b08ca47b64bdb64c8dd9e019c commit after last push
+
+Second actual fleet-sync invocation after the upstream snapshot is gone:
+demo: kept unpushed: upstream gone but its tip is not proven pushed (it may hold unpushed commits)
+demo: already current
+Repeated sync preserved exact unpublished tip: 6e64a62488b96b8b08ca47b64bdb64c8dd9e019c
+
+Actual fleet-sync after an independent fetch already removed upstream:
+demo: kept already-gone: upstream gone but its tip is not proven pushed (it may hold unpushed commits)
+demo: kept unpushed: upstream gone but its tip is not proven pushed (it may hold unpushed commits)
+demo: already current
+Unknown prior push conservatively preserved: 89351aa92df7e8891c1c9c631df175a3451e4bff

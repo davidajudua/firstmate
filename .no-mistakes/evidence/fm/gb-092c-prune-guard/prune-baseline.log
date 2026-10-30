@@ -1,0 +1,28 @@
+Before sync (remote branches deleted, local tracking refs still present):
+fully-pushed a9b2b2c [origin/fully-pushed] fully pushed work
+* main         e948451 [origin/main] squash
+  unpushed     e708a5f [origin/unpushed: ahead 1] commit after last push
+Fully pushed tip is absent from current remote main: True
+
+First actual fleet-sync invocation:
+demo: pruned fully-pushed
+demo: pruned unpushed
+demo: already current
+Traceback (most recent call last):
+  File "/home/david/.no-mistakes/evidence/01M6705EHESZ74D82NDGPPX4PN/drive-prune.py", line 30, in <module>
+    assert g('rev-parse','unpushed')==unpublished
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/david/.no-mistakes/evidence/01M6705EHESZ74D82NDGPPX4PN/drive-prune.py", line 17, in g
+    def g(*a):return git('-C',str(clone),*a)
+                     ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/david/.no-mistakes/evidence/01M6705EHESZ74D82NDGPPX4PN/drive-prune.py", line 12, in git
+    def git(*args):return run('git',*args)
+                          ^^^^^^^^^^^^^^^^
+  File "/home/david/.no-mistakes/evidence/01M6705EHESZ74D82NDGPPX4PN/drive-prune.py", line 10, in run
+    if p.returncode: raise RuntimeError(f'{args}: {p.stdout}')
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: ('git', '-C', '/home/david/.no-mistakes/worktrees/12215e17a012/01M6705EHESZ74D82NDGPPX4PN/.prune-live-mf2cchdn/projects/demo', 'rev-parse', 'unpushed'): fatal: ambiguous argument 'unpushed': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+unpushed
+
