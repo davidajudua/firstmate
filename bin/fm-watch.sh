@@ -3757,6 +3757,19 @@ while :; do
     triage_log "inactive-outcome reconciliation unavailable"
   fi
 
+  # A newly paused ship task's branch is pushed to its origin once per paused
+  # line; bin/fm-pause-push.sh owns eligibility, the bounded push, and which
+  # results queue a wake. Quiet unless a push was refused or files were dirty.
+  pause_push_out=
+  if pause_push_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_CONFIG_OVERRIDE="$CONFIG" \
+    "$SCRIPT_DIR/fm-pause-push.sh" scan 2>/dev/null); then
+    if [ -n "$pause_push_out" ]; then
+      wake "check: pause-push"
+    fi
+  else
+    triage_log "pause-push scan unavailable"
+  fi
+
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.
   # Evaluated BEFORE the signal scan: wake() exits the cycle, so a check placed
