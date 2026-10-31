@@ -1818,7 +1818,8 @@ test_prepublication_failure_keeps_concurrent_durable_metadata() {
     run_control "$dir" rl30 relaunch --harness codex --note "preserve concurrent metadata" \
       > "$dir/control.out" &
   control_pid=$!
-  while [ ! -e "$dir/cwd-race-ready" ] && [ "$i" -lt 200 ]; do
+  # Like trace delivery above, this point follows the whole spawn preflight.
+  while [ ! -e "$dir/cwd-race-ready" ] && [ "$i" -lt 6000 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
