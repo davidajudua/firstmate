@@ -48,11 +48,16 @@
 # no-mistakes mode only (bin/fm-project-mode.sh --pr; bin/fm-dod-lib.sh's
 # fm_pr_text_valid owns where it is accepted); the ship's Definition of done then
 # carries it.
-# Usage: fm-promote.sh <task-id> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--branch-prefix <prefix>] [--upstream-consent <host>/<owner>/<repo>]
+# Usage: fm-promote.sh <task-id> --mode <no-mistakes|direct-PR|local-only> --yolo <on|off> [--branch-prefix <prefix>] [--upstream-consent <host>/<owner>/<repo>] [--no-mistakes-exception <quote>]
 # --upstream-consent records the captain's one-off approval for this task to
 # publish to firstmate's own upstream repository; promotion applies the same
 # self-repository publication gate as bin/fm-spawn.sh (bin/fm-role-lib.sh), so
 # a promoted scout cannot gain authority a fresh ship spawn would be refused.
+# A +require-no-mistakes project (bin/fm-project-mode.sh) is gated the same way
+# as bin/fm-spawn.sh gates it: promotion to direct-PR or local-only is refused
+# unless --no-mistakes-exception carries the captain's quoted words for this one
+# task, which the promoted contract then records as the NO-MISTAKES-EXCEPTION
+# marker (bin/fm-dod-lib.sh).
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -90,6 +95,8 @@ FORGE=none
 PR_TEXT=auto
 UPSTREAM_CONSENT=
 UPSTREAM_CONSENT_SET=0
+NM_EXCEPTION=
+NM_EXCEPTION_SET=0
 POS=()
 want_value=
 for a in "$@"; do
@@ -102,6 +109,7 @@ for a in "$@"; do
       yolo) YOLO=$a; YOLO_SET=1 ;;
       branch-prefix) BRANCH_PREFIX=$a ;;
       upstream-consent) UPSTREAM_CONSENT=$a; UPSTREAM_CONSENT_SET=1 ;;
+      no-mistakes-exception) NM_EXCEPTION=$a; NM_EXCEPTION_SET=1 ;;
     esac
     want_value=
     continue
@@ -115,6 +123,8 @@ for a in "$@"; do
     --branch-prefix=*) BRANCH_PREFIX=${a#--branch-prefix=} ;;
     --upstream-consent) want_value="upstream-consent" ;;
     --upstream-consent=*) UPSTREAM_CONSENT=${a#--upstream-consent=}; UPSTREAM_CONSENT_SET=1 ;;
+    --no-mistakes-exception) want_value="no-mistakes-exception" ;;
+    --no-mistakes-exception=*) NM_EXCEPTION=${a#--no-mistakes-exception=}; NM_EXCEPTION_SET=1 ;;
     *) POS+=("$a") ;;
   esac
 done
@@ -150,6 +160,9 @@ if [ "$UPSTREAM_CONSENT_SET" -eq 1 ]; then
     exit 1
   }
   UPSTREAM_CONSENT=$(fm_role_scope_norm "$UPSTREAM_CONSENT")
+fi
+if [ "$NM_EXCEPTION_SET" -eq 1 ]; then
+  fm_nm_exception_valid "$NM_EXCEPTION" "$MODE" "fm-promote.sh --no-mistakes-exception" || exit 1
 fi
 # A posture this forge cannot carry is refused once the registry binding has been
 # read. Merge authority on a Gerrit forge is refused rather than quietly dropped,
@@ -244,6 +257,12 @@ if [ -n "$PROMOTE_PROJECT" ]; then
     exit 1
   fi
   [ "$MODE" != no-mistakes ] || PR_TEXT=${PROMOTE_STANDING_PR:-auto}
+  if [ "$MODE" != no-mistakes ] && [ "$NM_EXCEPTION_SET" -eq 0 ] &&
+    [ "$("$FM_ROOT/bin/fm-project-mode.sh" --require-no-mistakes "$PROMOTE_PROJECT_NAME" 2>/dev/null)" = on ]; then
+    echo "error: promotion refused for $ID: $(fm_nm_required_denial "$PROMOTE_PROJECT_NAME" "$MODE")" >&2
+    echo "error: promote with --mode no-mistakes, or, only when the captain explicitly approved skipping no-mistakes for this one task, pass --no-mistakes-exception '<the captain's quoted words>'" >&2
+    exit 1
+  fi
 fi
 BASE_BRANCH=$(sed -n 's/^base_branch=//p' "$META" | head -n 1)
 fm_base_branch_valid "$BASE_BRANCH" "$MODE" "$FORGE" "fm-promote.sh $ID" || exit 1
@@ -346,6 +365,7 @@ EOF
     printf '%s\n' "$PROMOTION_ASK_USER_BLOCK"
   fi
   printf '\n'
+  [ "$NM_EXCEPTION_SET" -eq 0 ] || printf '%s\n\n' "$(fm_nm_exception_block "$NM_EXCEPTION" "$MODE")"
   fm_dod_block "$MODE" "$ID" "$BRANCH" "$FORGE" "$BASE_BRANCH" "$UPSTREAM_CONSENT" "$PR_TEXT"
 }
 mkdir -p "$DATA/$ID"

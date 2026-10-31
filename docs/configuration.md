@@ -2117,6 +2117,15 @@ Firstmate passes it to `bin/fm-brief.sh --pr manual` at intake the same way it p
 The generated brief then has the worker pass `--skip pr,ci` on every `no-mistakes axi run`, write the PR title and body itself, open or update the PR with `gh-axi`, and wait for the PR's checks; `bin/fm-dod-lib.sh` owns that text.
 The token is the thin registry form of no-mistakes' own keep-text option, [kunchenguid/no-mistakes#1648](https://github.com/kunchenguid/no-mistakes/issues/1648), and is meant to map onto it once that exists.
 
+## Required no-mistakes (data/projects.md +require-no-mistakes token)
+
+A project with no `+require-no-mistakes` token keeps today's behavior: the task's delivery mode is firstmate's intake decision, and a mode below the registered posture only prints a deviation notice.
+A project whose ship tasks must all run the no-mistakes pipeline is registered with `+require-no-mistakes` beside its mode, for example `[no-mistakes-prod-only +require-no-mistakes]`; it is off by default, and `bin/fm-project-mode.sh --require-no-mistakes <name>` reads it back as `on` or `off`.
+`bin/fm-spawn.sh` then refuses a fresh ship spawn with `--mode direct-PR` or `--mode local-only`, including either leg of a `no-mistakes-prod-only` split, and `bin/fm-promote.sh` refuses the same modes for a promoted scout.
+The one exception is the captain's quoted approval for that one task: `bin/fm-brief.sh --no-mistakes-exception '<the captain's quoted words>'` writes it into the ship brief, and `bin/fm-promote.sh --no-mistakes-exception` writes it into the promoted contract, as a `NO-MISTAKES-EXCEPTION: "<quote>"` line whose format `bin/fm-dod-lib.sh` owns.
+`config/brief-include.md` may not carry that line, so a home cannot hold a standing exception.
+A scout spawned on such a project also gets a per-task pre-push guard that refuses every push while the task is still a scout, and promotion lifts it without a relaunch; `bin/fm-git-push-guard.sh`'s header owns the rule and the residual paths it cannot see.
+
 ## GitHub Enterprise hosts (config/github-hosts)
 
 `config/github-hosts` is an optional local, gitignored file naming the GitHub Enterprise hosts whose pull request URLs this home accepts, one lowercase hostname per line, such as `leadsonline.ghe.com`.

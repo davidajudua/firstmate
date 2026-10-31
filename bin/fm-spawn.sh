@@ -26,7 +26,10 @@
 #   AI trailers, and records forge=external, backup_remote=, and backup_prefix=
 #   in the task metadata for bin/fm-dod-lib.sh's ready-report gate. A
 #   registry entry the parser refuses stops the spawn rather than launching on a
-#   guessed posture. A
+#   guessed posture. On a +require-no-mistakes project a fresh ship spawn
+#   refuses any mode but no-mistakes unless the brief carries the captain's
+#   quoted NO-MISTAKES-EXCEPTION line (bin/fm-dod-lib.sh), and a scout spawn
+#   installs the scout pre-push guard (bin/fm-git-push-guard.sh). A
 #   ship or scout spawn also refuses leftover `{TASK}` / `{FIRSTMATE_SPEC}`
 #   placeholders, an empty Task, an incomplete pair of Task subsections, or a
 #   `## Captain's intent` line opening with a Captain label or address.
@@ -4038,6 +4041,16 @@ if [ "$KIND" = ship ]; then
     echo "error: upstream-consent mismatch for $ID: $BRIEF records upstream-consent=${BRIEF_CONSENT:-none} but this spawn passed ${UPSTREAM_CONSENT:-none}; correct the flag or re-scaffold the brief so the worker's contract and the task record agree" >&2
     exit 1
   fi
+  # A +require-no-mistakes project ships every task through the pipeline unless
+  # the brief carries the captain's quoted exception (bin/fm-dod-lib.sh owns the
+  # marker). A relaunch resumes a task a fresh spawn already admitted.
+  if [ "$RELAUNCH" -eq 0 ] && [ "$MODE" != no-mistakes ] &&
+    [ "$("$FM_ROOT/bin/fm-project-mode.sh" --require-no-mistakes "$PROJ_NAME" 2>/dev/null)" = on ] &&
+    ! fm_brief_nm_exception "$BRIEF" >/dev/null; then
+    echo "error: spawn refused for $ID: $(fm_nm_required_denial "$PROJ_NAME" "$MODE")" >&2
+    echo "error: re-scaffold the brief with --mode no-mistakes and spawn with --mode no-mistakes, or, only when the captain explicitly approved skipping no-mistakes for this one task, re-scaffold it with bin/fm-brief.sh $ID $PROJ_NAME --mode $MODE --no-mistakes-exception '<the captain's quoted words>' and spawn again" >&2
+    exit 1
+  fi
   # The registered forge is the captain's confirmed binding (bin/fm-project-mode.sh)
   # and is never inferred here from a remote, host, or protocol. A brief that
   # disagrees with it would tell the worker to open a pull request a Gerrit
@@ -6601,6 +6614,20 @@ if [ "$EXTERNAL_REVIEW" = 1 ]; then
     && "$FM_ROOT/bin/fm-git-strip-ai-trailers.sh" install "${strip_args[@]+"${strip_args[@]}"}" \
       --push-guard "$PUSH_GUARD_FILE" "$GIT_HOOKS_DIR" "$WT"; } || {
     echo "error: could not install the external-review push guard hooks for $ID" >&2
+    exit 1
+  }
+  GIT_HOOKS_INSTALLED=1
+elif [ "$KIND" = scout ] &&
+  [ "$("$FM_ROOT/bin/fm-project-mode.sh" --require-no-mistakes "$(basename "$PROJ_ABS")" 2>/dev/null)" = on ]; then
+  # A scout of a +require-no-mistakes project publishes nothing; the guard reads
+  # this task record at push time, so promotion to a ship lifts it.
+  PUSH_GUARD_FILE="$STATE_REAL/$ID.push-guard"
+  strip_args=()
+  [ "$KEEP_AI_TRAILERS" = 0 ] || strip_args=(--no-strip)
+  { "$FM_ROOT/bin/fm-git-push-guard.sh" write-scout "$PUSH_GUARD_FILE" "$STATE_REAL/$ID.meta" \
+    && "$FM_ROOT/bin/fm-git-strip-ai-trailers.sh" install "${strip_args[@]+"${strip_args[@]}"}" \
+      --push-guard "$PUSH_GUARD_FILE" "$GIT_HOOKS_DIR" "$WT"; } || {
+    echo "error: could not install the scout push guard hooks for $ID" >&2
     exit 1
   }
   GIT_HOOKS_INSTALLED=1
