@@ -14,7 +14,7 @@
 # charters still use a single `{TASK}` charter fill. Firstmate may adjust other
 # sections when the task genuinely deviates (e.g. working an existing external
 # PR instead of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--branch-prefix <prefix>] [--base-branch <branch>] [--forge <none|gerrit|forgejo|external> [--shape squash]] [--pr <auto|manual>] [--herdr-lab]
+# Usage: fm-brief.sh <task-id> <repo-name> --mode <no-mistakes|direct-PR|local-only> [--branch-prefix <prefix>] [--base-branch <branch>] [--forge <none|gerrit|forgejo|external> [--shape squash]] [--pr <auto|manual>] [--no-mistakes-exception <quote>] [--herdr-lab]
 #        fm-brief.sh <task-id> <repo-name> --scout [--base-branch <branch>] [--herdr-lab]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #   --scout writes the scout contract instead: the deliverable is a report at
@@ -98,6 +98,13 @@
 # authority and records it in the task record, and bin/fm-promote.sh honors it
 # the same way. Ship-only: a scout publishes nothing and a charter is not a
 # delivery contract.
+# --no-mistakes-exception <quote> records the captain's quoted approval for this
+# one direct-PR or local-only task of a +require-no-mistakes project, whose
+# spawn is otherwise refused (bin/fm-project-mode.sh owns the token). It writes a
+# `# No-mistakes exception` section carrying the NO-MISTAKES-EXCEPTION marker
+# line just above the Definition of done; bin/fm-dod-lib.sh owns the marker and
+# its validation. Ship-only, refused with --mode no-mistakes, and never taken
+# from config/brief-include.md, so a home cannot carry a standing exception.
 # --project <dir> is the task's project directory, used to detect when a ship
 # brief would publish to firstmate's own repository: for such a task this
 # scaffold refuses a publishing mode that the home's role or recorded consent
@@ -235,6 +242,8 @@ UPSTREAM_CONSENT=
 UPSTREAM_CONSENT_SET=0
 PROJECT_DIR=
 PROJECT_DIR_SET=0
+NM_EXCEPTION=
+NM_EXCEPTION_SET=0
 POS=()
 want_value=
 for a in "$@"; do
@@ -251,6 +260,7 @@ for a in "$@"; do
       pr) PR_TEXT=$a; PR_TEXT_SET=1 ;;
       upstream-consent) UPSTREAM_CONSENT=$a; UPSTREAM_CONSENT_SET=1 ;;
       project) PROJECT_DIR=$a; PROJECT_DIR_SET=1 ;;
+      no-mistakes-exception) NM_EXCEPTION=$a; NM_EXCEPTION_SET=1 ;;
       *) echo "error: internal parser state for --$want_value" >&2; exit 1 ;;
     esac
     want_value=
@@ -277,6 +287,8 @@ for a in "$@"; do
     --upstream-consent=*) UPSTREAM_CONSENT=${a#--upstream-consent=}; UPSTREAM_CONSENT_SET=1 ;;
     --project) want_value="project" ;;
     --project=*) PROJECT_DIR=${a#--project=}; PROJECT_DIR_SET=1 ;;
+    --no-mistakes-exception) want_value="no-mistakes-exception" ;;
+    --no-mistakes-exception=*) NM_EXCEPTION=${a#--no-mistakes-exception=}; NM_EXCEPTION_SET=1 ;;
     # yolo never reaches the worker: it is firstmate's merge authority, not a
     # brief input. Refuse it loudly so it is never silently dropped here and then
     # believed to have been recorded.
@@ -363,6 +375,15 @@ if [ "$KIND" != ship ]; then
     echo "error: --project applies only to ship briefs" >&2
     exit 1
   }
+  [ "$NM_EXCEPTION_SET" -eq 0 ] || {
+    echo "error: --no-mistakes-exception applies only to ship briefs; a scout publishes nothing and a charter is not a delivery contract" >&2
+    exit 1
+  }
+fi
+NM_EXCEPTION_SECTION=
+if [ "$NM_EXCEPTION_SET" -eq 1 ]; then
+  fm_nm_exception_valid "$NM_EXCEPTION" "$MODE" "fm-brief.sh --no-mistakes-exception" || exit 1
+  NM_EXCEPTION_SECTION="$(fm_nm_exception_block "$NM_EXCEPTION" "$MODE")"$'\n\n'
 fi
 if [ "$UPSTREAM_CONSENT_SET" -eq 1 ]; then
   [ -n "$UPSTREAM_CONSENT" ] || {
@@ -423,6 +444,10 @@ if [ "$KIND" != secondmate ] && { [ -e "$BRIEF_INCLUDE_FILE" ] || [ -L "$BRIEF_I
   }
   if printf '%s\n' "$BRIEF_INCLUDE_BODY" | grep -q '^Delivery contract: mode='; then
     echo "error: $BRIEF_INCLUDE_FILE must not carry a 'Delivery contract: mode=' line; the delivery mode is a per-task --mode decision" >&2
+    exit 1
+  fi
+  if printf '%s\n' "$BRIEF_INCLUDE_BODY" | grep -q '^NO-MISTAKES-EXCEPTION:'; then
+    echo "error: $BRIEF_INCLUDE_FILE must not carry a 'NO-MISTAKES-EXCEPTION:' line; an exception is the captain's per-task approval, passed with --no-mistakes-exception" >&2
     exit 1
   fi
   [ -n "$(printf '%s' "$BRIEF_INCLUDE_BODY" | tr -d '[:space:]')" ] || BRIEF_INCLUDE_BODY=
@@ -829,7 +854,7 @@ $WAIT_BLOCK$INBOX_SECTION
 A project's \`AGENTS.md\` or \`CLAUDE.md\` is loaded into every agent session in that project, so edit it only to correct information that is factually wrong - including information your own change made wrong - and never to add knowledge because it is missing.
 A correction edits only the wrong text: do not run \`$FM_ROOT/bin/fm-ensure-agents-md.sh\`, create either file, or add sections, headings, or pointers alongside it.
 
-$DOD
+$NM_EXCEPTION_SECTION$DOD
 EOF
 append_brief_include
 if [ "$PR_TEXT" = manual ]; then

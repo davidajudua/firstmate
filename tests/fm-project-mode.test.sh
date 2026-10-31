@@ -40,6 +40,8 @@ cat > "$DATA/projects.md" <<'EOF'
 - hand-forgejo [no-mistakes forge=forgejo pr=manual] - a bound forge (added 2026-01-01)
 - hand-empty [no-mistakes pr=] - an empty value (added 2026-01-01)
 - hand-auto [no-mistakes pr=auto] - auto is the absence of the token, not a value (added 2026-01-01)
+- strict [no-mistakes-prod-only +require-no-mistakes] - every task runs the pipeline (added 2026-01-01)
+- strict-first [+require-no-mistakes direct-PR +yolo branch=] - token first, order must not matter (added 2026-01-01)
 EOF
 
 run_mode() {
@@ -160,5 +162,21 @@ assert_contains "$err" "pr=manual" "the unknown pr value refusal did not name th
 err=$(FM_DATA_OVERRIDE="$DATA" "$PROJECT_MODE" --pr hand-direct 2>&1 >/dev/null)
 assert_contains "$err" "only a no-mistakes ship takes it" "the direct-PR refusal did not say why"
 pass "fm-project-mode: pr=manual refuses another mode, a bound forge, an empty value, and an unknown value, but leaves --forge answerable"
+
+run_nm() {
+  FM_DATA_OVERRIDE="$DATA" "$PROJECT_MODE" --require-no-mistakes "$1" 2>/dev/null
+}
+[ "$(run_nm strict)" = on ] || fail "+require-no-mistakes did not resolve: $(run_nm strict)"
+[ "$(run_nm strict-first)" = on ] || fail "+require-no-mistakes first did not resolve: $(run_nm strict-first)"
+[ "$(run_nm legacy)" = off ] || fail "an entry with no token must report off: $(run_nm legacy)"
+[ "$(run_nm flagged)" = off ] || fail "+yolo alone must not require no-mistakes: $(run_nm flagged)"
+[ "$(run_nm no-such-project)" = off ] || fail "an unregistered project must report off: $(run_nm no-such-project)"
+[ "$(run_mode strict)" = "no-mistakes off" ] || fail "the token changed the default output: $(run_mode strict)"
+[ "$(run_mode strict-first)" = "direct-PR on" ] || fail "the token was read as the mode: $(run_mode strict-first)"
+[ "$(FM_DATA_OVERRIDE="$DATA" "$PROJECT_MODE" --raw strict 2>/dev/null)" = "no-mistakes-prod-only off" ] \
+  || fail "the token changed the raw output"
+[ "$(FM_DATA_OVERRIDE="$DATA" "$PROJECT_MODE" --branch-prefix strict-first 2>/dev/null)" = "" ] \
+  || fail "the token displaced an empty branch override"
+pass "fm-project-mode: +require-no-mistakes reads back on in any order, off otherwise, and leaves every other output unchanged"
 
 echo "# fm-project-mode.test.sh: all assertions passed"

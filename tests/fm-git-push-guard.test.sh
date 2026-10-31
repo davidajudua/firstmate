@@ -149,7 +149,42 @@ test_unreadable_guard_refuses_everything() {
   pass "push guard: an unreadable guard file refuses every push"
 }
 
+# A scout record names the task's meta: every push is refused while it says
+# kind=scout, and the same installed hooks let pushes through once promotion
+# flips it.
+test_scout_record_refuses_until_promotion() {
+  local dir guard meta
+  dir="$TMP_ROOT/scout"
+  fm_git_worktree "$dir/repo" "$dir/wt" scratch
+  FX_WT="$dir/wt"
+  FX_ORIGIN="$dir/repo.origin.git"
+  git -C "$FX_WT" commit -q --allow-empty -m 'a scout experiment'
+  meta="$dir/t1.meta"
+  printf 'kind=scout\nproject=%s\n' "$dir/repo" > "$meta"
+  guard="$dir/guard"
+  "$GUARD" write-scout "$guard" "$meta" || fail "scout guard write failed"
+  FX_HOOKS="$dir/hooks"
+  "$STRIP" install --push-guard "$guard" "$FX_HOOKS" "$FX_WT" || fail "install --push-guard failed"
+  push origin HEAD:refs/heads/fm/t1
+  refused "a scout branch pushed to origin" "delivers a report and never a pushed branch or PR" "$FX_ORIGIN" refs/heads/fm/t1
+  git init -q --bare "$dir/other.git"
+  push "file://$dir/other.git" HEAD:refs/heads/anything
+  refused "a scout push to an unrelated remote" "scout task" "$dir/other.git" refs/heads/anything
+
+  printf 'kind=ship\nmode=no-mistakes\nproject=%s\n' "$dir/repo" > "$meta"
+  push origin HEAD:refs/heads/fm/t1
+  [ "$PUSH_RC" -eq 0 ] || fail "a promoted task's push was still refused: $PUSH_OUT"
+  assert_equals "$(git -C "$FX_WT" rev-parse HEAD)" "$(git -C "$FX_ORIGIN" rev-parse refs/heads/fm/t1)" \
+    "the promoted task's push did not land"
+
+  rm "$meta"
+  push origin HEAD:refs/heads/fm/t1-again
+  refused "a push whose task record is gone" "unreadable" "$FX_ORIGIN" refs/heads/fm/t1-again
+  pass "push guard: a scout record refuses every push until promotion, and an unreadable task record refuses"
+}
+
 test_origin_pushes_are_refused
+test_scout_record_refuses_until_promotion
 test_backup_namespace_rules
 test_empty_prefix_still_refuses_the_task_branch
 test_repository_pre_push_still_chains

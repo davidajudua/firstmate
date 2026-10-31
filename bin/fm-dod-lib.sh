@@ -226,6 +226,64 @@ fm_pr_text_valid() {  # <pr> <mode> <forge> <caller>
   return 0
 }
 
+# The captain's quoted exception that lets one ship task of a
+# +require-no-mistakes project (bin/fm-project-mode.sh) ship without the
+# pipeline. It is one line, NO-MISTAKES-EXCEPTION: "<the captain's quoted
+# words>", which bin/fm-brief.sh --no-mistakes-exception writes into a ship
+# brief and bin/fm-promote.sh --no-mistakes-exception writes into a promoted
+# contract; bin/fm-spawn.sh reads it back from the brief. The quote must be one
+# nonblank line, and a no-mistakes task has nothing to except.
+fm_nm_exception_valid() {  # <quote> <mode> <caller>
+  local quote=$1 mode=$2 caller=$3
+  case "$quote" in
+    *$'\n'* | *$'\r'*)
+      echo "error: $caller: the no-mistakes exception must be the captain's quoted words on one line" >&2
+      return 1 ;;
+  esac
+  if [ -z "$(printf '%s' "$quote" | tr -d '[:space:]')" ]; then
+    echo "error: $caller: the no-mistakes exception requires the captain's quoted words; an empty quote approves nothing" >&2
+    return 1
+  fi
+  if [ "$mode" = no-mistakes ]; then
+    echo "error: $caller: a no-mistakes exception is meaningless on mode=no-mistakes, which already runs the pipeline; drop it" >&2
+    return 1
+  fi
+  return 0
+}
+
+fm_nm_exception_block() {  # <quote> <mode>
+  printf '# No-mistakes exception\nNO-MISTAKES-EXCEPTION: "%s"\n' "$1"
+  printf 'This line records the captain'\''s quoted approval for this one task to ship mode=%s on a project that otherwise requires no-mistakes.\n' "$2"
+}
+
+# Prints the quote of a brief's first well-formed exception line; fails when
+# there is none.
+fm_brief_nm_exception() {  # <brief>
+  local quote
+  quote=$(sed -n 's/^NO-MISTAKES-EXCEPTION: "\(.*\)"[[:space:]]*$/\1/p' -- "$1" | head -n 1)
+  [ -n "$(printf '%s' "$quote" | tr -d '[:space:]')" ] || return 1
+  printf '%s\n' "$quote"
+}
+
+fm_nm_relaunch_allowed() {
+  local root=$1 meta=$2 brief=$3 project mode required
+  [ "$(fm_meta_get "$meta" kind)" = ship ] || return 0
+  mode=$(fm_meta_get "$meta" mode)
+  [ "$mode" != no-mistakes ] || return 0
+  project=$(fm_meta_get "$meta" project)
+  project=$(basename "$project")
+  required=$("$root/bin/fm-project-mode.sh" --require-no-mistakes "$project") || return 1
+  [ "$required" = on ] || return 0
+  fm_brief_nm_exception "$brief" >/dev/null && return 0
+  printf 'error: relaunch refused: %s\n' "$(fm_nm_required_denial "$project" "$mode")" >&2
+  printf '%s\n' 'error: re-scaffold or add the captain-approved NO-MISTAKES-EXCEPTION: "<quoted words>" line to the brief (--no-mistakes-exception), or move the task and its brief to mode=no-mistakes before relaunching' >&2
+  return 1
+}
+
+fm_nm_required_denial() {  # <project-name> <mode>
+  printf '%s is registered +require-no-mistakes, so every ship task there runs mode=no-mistakes, and this task selected mode=%s without the captain'\''s quoted exception\n' "$1" "$2"
+}
+
 # The task branch prefix: <branch> with its trailing <task-id> removed, or
 # empty when the branch is the bare task id or does not end with it.
 fm_ship_branch_prefix() {  # <branch> <task-id>
