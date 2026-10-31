@@ -507,7 +507,9 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
     FM_FAKE_TRACE_RELEASE="$launch_release" \
     run_control "$dir" rl28 relaunch --note "continue after publication" > "$dir/control.out" &
   control_pid=$!
-  while [ ! -e "$prepare" ] && [ "$i" -lt 500 ]; do
+  # A full relaunch reaches this point only after the whole spawn preflight,
+  # which takes well over five seconds on a busy host.
+  while [ ! -e "$prepare" ] && [ "$i" -lt 6000 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
