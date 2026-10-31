@@ -364,6 +364,60 @@ SH
 
 # --- 1. same-harness relaunch -----------------------------------------------
 
+test_required_no_mistakes_relaunch_checks_before_mutation() {
+  local dir mode entry id out rc meta brief head branch status
+  for mode in direct-PR local-only; do
+    for entry in control spawn; do
+      id="rl-required-$mode-$entry"
+      dir=$(new_case "$id" "$id")
+      add_ship_task "$dir" "$id" claude
+      meta="$dir/home/state/$id.meta"
+      brief="$dir/home/data/$id/brief.md"
+      sed "s/^mode=no-mistakes$/mode=$mode/" "$meta" > "$meta.new"
+      mv "$meta.new" "$meta"
+      printf -- '- proj [no-mistakes-prod-only +require-no-mistakes] - fixture\n' > "$dir/home/data/projects.md"
+      printf 'unfinished work\n' > "$dir/wt/unfinished.txt"
+      cp "$meta" "$dir/meta.before"
+      cp "$brief" "$dir/brief.before"
+      head=$(git -C "$dir/wt" rev-parse HEAD)
+      branch=$(git -C "$dir/wt" symbolic-ref HEAD)
+      status=$(git -C "$dir/wt" status --porcelain)
+      [ "$entry" != spawn ] || printf 'zsh' > "$dir/fake/command"
+      if [ "$entry" = control ]; then
+        out=$(run_control "$dir" "$id" relaunch --note "continue work"); rc=$?
+      else
+        out=$(run_spawn "$dir" "$id" --relaunch); rc=$?
+      fi
+      [ "$rc" -ne 0 ] || fail "$entry relaunched $mode without an exception"
+      assert_contains "$out" "registered +require-no-mistakes" "$entry did not name the requirement"
+      assert_contains "$out" "NO-MISTAKES-EXCEPTION" "$entry did not name the remedy"
+      cmp -s "$meta" "$dir/meta.before" || fail "$entry changed the task record"
+      cmp -s "$brief" "$dir/brief.before" || fail "$entry changed the instructions"
+      [ ! -e "$dir/home/state/$id.control-relaunch" ] || fail "$entry began a relaunch transaction"
+      [ ! -s "$dir/fake/literal" ] || fail "$entry sent agent input"
+      [ ! -s "$dir/fake/keys" ] || fail "$entry sent terminal keys"
+      [ ! -e "$dir/fake/created-sessions" ] || fail "$entry created an endpoint"
+      [ "$(git -C "$dir/wt" rev-parse HEAD)" = "$head" ] || fail "$entry moved HEAD"
+      [ "$(git -C "$dir/wt" symbolic-ref HEAD)" = "$branch" ] || fail "$entry changed branches"
+      [ "$(git -C "$dir/wt" status --porcelain)" = "$status" ] || fail "$entry changed local work"
+      [ "$(cat "$dir/wt/unfinished.txt")" = 'unfinished work' ] || fail "$entry lost unfinished work"
+      if [ "$entry" = control ]; then
+        [ "$(cat "$dir/fake/command")" = claude ] || fail "control stopped the agent"
+      fi
+      printf '\nNO-MISTAKES-EXCEPTION: "Ship this task without no-mistakes."\n' >> "$brief"
+      if [ "$entry" = control ]; then
+        out=$(run_control "$dir" "$id" relaunch --note "continue work"); rc=$?
+      else
+        out=$(run_spawn "$dir" "$id" --relaunch); rc=$?
+      fi
+      expect_code 0 "$rc" "$entry should relaunch $mode with the quoted exception"$'\n'"$out"
+      [ "$(cat "$dir/fake/command")" = claude ] || fail "$entry did not launch the replacement"
+      [ "$(meta_field "$dir" "$id" mode)" = "$mode" ] || fail "$entry lost the delivery mode"
+    done
+  done
+  pass "required no-mistakes: both relaunch commands preserve refused ships and accept quoted exceptions"
+}
+
 test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint() {
   local dir out rc gen_before gen_after
   dir=$(new_case same rl1)
@@ -1600,6 +1654,7 @@ test_spawn_relaunch_of_promoted_scout_uses_the_recorded_branch() {
 
 test_promoted_scout_relaunch_receives_the_current_delivery_contract() {
   local dir home id brief launch out mode rule
+  local -a exception_args
   for mode in no-mistakes direct-PR local-only; do
     id="rl-promoted-${mode}"
     dir=$(new_case "promoted-scout-$mode" "$id")
@@ -1625,8 +1680,11 @@ test_promoted_scout_relaunch_receives_the_current_delivery_contract() {
     printf '%s\n' "fm-$id" > "$dir/fake/windows"
     printf '%s' "$dir/wt" > "$dir/fake/cwd"
 
+    printf -- '- proj [no-mistakes-prod-only +require-no-mistakes] - fixture\n' > "$home/data/projects.md"
+    exception_args=()
+    [ "$mode" = no-mistakes ] || exception_args=(--no-mistakes-exception "Ship this promoted task without no-mistakes.")
     out=$(FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$home" FM_STATE_OVERRIDE="$home/state" \
-      "$PROMOTE" "$id" --mode "$mode" --yolo off 2>&1) \
+      "$PROMOTE" "$id" --mode "$mode" --yolo off ${exception_args[@]+"${exception_args[@]}"} 2>&1) \
       || fail "$mode: scout promotion should succeed: $out"
     assert_grep 'This is a SCOUT task' "$brief" \
       "$mode: the reproduction fixture lost the original scout delivery text"
@@ -2972,6 +3030,7 @@ SH
 test_relaunch_off_opencode_removes_tracked_wiring
 test_exit_and_relaunch_remove_the_dialog_file
 test_exit_removes_the_dialog_file_before_releasing_the_lock
+test_required_no_mistakes_relaunch_checks_before_mutation
 test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint
 test_relaunch_refuses_before_exit_when_the_composer_holds_pending_text
 test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven

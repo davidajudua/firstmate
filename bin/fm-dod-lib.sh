@@ -265,6 +265,21 @@ fm_brief_nm_exception() {  # <brief>
   printf '%s\n' "$quote"
 }
 
+fm_nm_relaunch_allowed() {
+  local root=$1 meta=$2 brief=$3 project mode required
+  [ "$(fm_meta_get "$meta" kind)" = ship ] || return 0
+  mode=$(fm_meta_get "$meta" mode)
+  [ "$mode" != no-mistakes ] || return 0
+  project=$(fm_meta_get "$meta" project)
+  project=$(basename "$project")
+  required=$("$root/bin/fm-project-mode.sh" --require-no-mistakes "$project") || return 1
+  [ "$required" = on ] || return 0
+  fm_brief_nm_exception "$brief" >/dev/null && return 0
+  printf 'error: relaunch refused: %s\n' "$(fm_nm_required_denial "$project" "$mode")" >&2
+  printf '%s\n' 'error: re-scaffold or add the captain-approved NO-MISTAKES-EXCEPTION: "<quoted words>" line to the brief (--no-mistakes-exception), or move the task and its brief to mode=no-mistakes before relaunching' >&2
+  return 1
+}
+
 fm_nm_required_denial() {  # <project-name> <mode>
   printf '%s is registered +require-no-mistakes, so every ship task there runs mode=no-mistakes, and this task selected mode=%s without the captain'\''s quoted exception\n' "$1" "$2"
 }

@@ -26,7 +26,7 @@
 #   AI trailers, and records forge=external, backup_remote=, and backup_prefix=
 #   in the task metadata for bin/fm-dod-lib.sh's ready-report gate. A
 #   registry entry the parser refuses stops the spawn rather than launching on a
-#   guessed posture. On a +require-no-mistakes project a fresh ship spawn
+#   guessed posture. On a +require-no-mistakes project a ship spawn or relaunch
 #   refuses any mode but no-mistakes unless the brief carries the captain's
 #   quoted NO-MISTAKES-EXCEPTION line (bin/fm-dod-lib.sh), and a scout spawn
 #   installs the scout pre-push guard (bin/fm-git-push-guard.sh). A
@@ -2128,6 +2128,9 @@ spawn_require_relocated_queued_work() {
     exit 1
   fi
 }
+if [ "$RELAUNCH" -eq 1 ] && [ -f "$STATE/$ID.meta" ] && [ ! -L "$STATE/$ID.meta" ]; then
+  fm_nm_relaunch_allowed "$FM_ROOT" "$STATE/$ID.meta" "$DATA/$ID/brief.md" || exit 1
+fi
 if [ "$RELAUNCH" -eq 1 ]; then
   SPAWN_CONTROL_LOCK="$STATE/.control-$ID.lock"
   control_owner=$(cat "$SPAWN_CONTROL_LOCK/pid" 2>/dev/null || true)
@@ -4043,7 +4046,7 @@ if [ "$KIND" = ship ]; then
   fi
   # A +require-no-mistakes project ships every task through the pipeline unless
   # the brief carries the captain's quoted exception (bin/fm-dod-lib.sh owns the
-  # marker). A relaunch resumes a task a fresh spawn already admitted.
+  # marker).
   if [ "$RELAUNCH" -eq 0 ] && [ "$MODE" != no-mistakes ] &&
     [ "$("$FM_ROOT/bin/fm-project-mode.sh" --require-no-mistakes "$PROJ_NAME" 2>/dev/null)" = on ] &&
     ! fm_brief_nm_exception "$BRIEF" >/dev/null; then
