@@ -335,6 +335,7 @@ if ! fm_task_id_creation_valid "$RAW_ID"; then
 fi
 ID=$RAW_ID
 if [ "$VERB" = relaunch ] && [ -f "$STATE/$ID.meta" ] && [ ! -L "$STATE/$ID.meta" ]; then
+  # shellcheck source=bin/fm-dod-lib.sh
   . "$SCRIPT_DIR/fm-dod-lib.sh"
   fm_nm_relaunch_allowed "$FM_ROOT" "$STATE/$ID.meta" "$DATA/$ID/brief.md" || exit 1
 fi
