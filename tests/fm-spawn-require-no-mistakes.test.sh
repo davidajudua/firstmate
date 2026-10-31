@@ -162,8 +162,7 @@ test_promotion_applies_the_same_gate() {
   local out status meta id
   make_case promote "no-mistakes-prod-only +require-no-mistakes"
   for id in nm-p1 nm-p2 nm-p3; do
-    printf 'window=fm-%s\nkind=scout\nworktree=/tmp/wt\nproject=%s\n' "$id" "$HOME_DIR/projects/project" > "$HOME_DIR/state/$id.meta"
-    mkdir -p "$HOME_DIR/projects/project"
+    printf 'window=fm-%s\nkind=scout\nworktree=/tmp/wt\nproject=%s\n' "$id" "$PROJECT_DIR" > "$HOME_DIR/state/$id.meta"
     scaffold "$id" --scout
   done
   meta="$HOME_DIR/state/nm-p1.meta"
