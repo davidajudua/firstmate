@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Per-task pre-push guard for a forge=external project, whose review tool
 # uploads its own snapshot so a worker never needs to push a branch
-# (docs/external-review-forge.md owns the design).
+# (docs/external-review-forge.md owns the design), and for a scout of a
+# +require-no-mistakes project (bin/fm-project-mode.sh), whose deliverable is a
+# report rather than a published branch.
 #
 # Usage:
 #   fm-git-push-guard.sh <guard-file> <remote-name> <remote-url>
@@ -13,6 +15,9 @@
 #       Write <guard-file> read-only for a launch: every normalized fetch and
 #       push URL of <repo>'s origin as a shared URL, the task branch, the task
 #       prefix, and the optional backup remote, its URLs, and its prefix.
+#   fm-git-push-guard.sh write-scout <guard-file> <task-meta>
+#       Write <guard-file> read-only for a scout launch, naming the task's
+#       absolute state/<id>.meta record.
 #
 # bin/fm-spawn.sh writes the guard file and passes it to
 # `bin/fm-git-strip-ai-trailers.sh install --push-guard`, whose pre-push wrapper
@@ -25,10 +30,14 @@
 #   (b) any destination ref equal to refs/heads/<task-branch>, or under
 #       refs/heads/<task-prefix> when that prefix is non-empty, on any remote;
 #   (c) on the backup remote, any destination outside refs/heads/<backup-prefix>.
-# An unreadable or malformed guard file refuses every push.
+# A scout record instead refuses every push while <task-meta> still records
+# kind=scout, and lets every push through once bin/fm-promote.sh has flipped it,
+# so promotion lifts the guard without rewriting the hooks; an unreadable
+# <task-meta> refuses. An unreadable or malformed guard file refuses every push.
 #
 # ACCEPTED RESIDUAL. `git push --no-verify` skips every hook, a tool that
-# writes refs without running git never reaches one, and an alias URL spelled
+# writes refs without running git (such as a branch created through the forge
+# API) never reaches one, and an alias URL spelled
 # differently from origin (an ssh form against an https form of the same
 # server) does not compare equal. Each bypasses this layer; the brief's first
 # rule still forbids all three, and no gate or cleanup step requires a push on
@@ -44,6 +53,7 @@ usage() {
 usage:
   fm-git-push-guard.sh <guard-file> <remote-name> <remote-url>
   fm-git-push-guard.sh write <guard-file> <repo> <task-branch> <task-prefix> [<backup-remote> <backup-prefix>]
+  fm-git-push-guard.sh write-scout <guard-file> <task-meta>
 EOF
   exit 2
 }
@@ -81,9 +91,21 @@ write_guard() {  # <guard-file> <repo> <task-branch> <task-prefix> [<backup-remo
   fi
 }
 
+write_scout_guard() {  # <guard-file> <task-meta>
+  local out=$1 meta=$2 tmp
+  [ -n "$out" ] && [ -n "$meta" ] || usage
+  case "$meta" in /*) ;; *) usage ;; esac
+  tmp=$(mktemp "$out.XXXXXX") || return 1
+  printf 'fm-git-push-guard-v1\nscout_meta=%s\n' "$meta" >"$tmp" || { rm -f "$tmp"; return 1; }
+  if ! chmod 400 "$tmp" || ! mv -f "$tmp" "$out"; then
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
 guard_push() {  # <guard-file> <remote-name> <remote-url>
   local file=$1 name=$2 url=$3 line key value header
-  local task_branch='' task_prefix='' backup='' backup_prefix='' has_branch=0
+  local task_branch='' task_prefix='' backup='' backup_prefix='' has_branch=0 scout_meta=''
   local -a shared=() backup_urls=()
   [ -f "$file" ] && [ -r "$file" ] || refuse "the push guard file $file is unreadable, so no push can be checked"
   header=$(sed -n '1p' "$file")
@@ -98,8 +120,17 @@ guard_push() {  # <guard-file> <remote-name> <remote-url>
       backup_remote) backup=$value ;;
       backup_prefix) backup_prefix=$value ;;
       backup_url) backup_urls+=("$value") ;;
+      scout_meta) scout_meta=$value ;;
     esac
   done < <(sed '1d' "$file")
+  if [ -n "$scout_meta" ]; then
+    [ -f "$scout_meta" ] && [ -r "$scout_meta" ] ||
+      refuse "the task record $scout_meta is unreadable, so this scout task cannot be shown to have been promoted"
+    if grep -qx 'kind=scout' "$scout_meta"; then
+      refuse "this is a scout task on a project that requires no-mistakes, so it delivers a report and never a pushed branch or PR; write the findings and any recommended change into the report, and firstmate promotes the task if the work should ship"
+    fi
+    return 0
+  fi
   [ "$has_branch" = 1 ] && [ -n "$task_branch" ] || refuse "the push guard file $file names no task branch"
   if [ -n "$backup" ] && [ -z "$backup_prefix" ]; then
     refuse "the push guard file $file names a backup remote with no prefix"
@@ -152,6 +183,11 @@ case "${1:-}" in
     [ "$#" -eq 5 ] || [ "$#" -eq 7 ] || usage
     shift
     write_guard "$@"
+    ;;
+  write-scout)
+    [ "$#" -eq 3 ] || usage
+    shift
+    write_scout_guard "$@"
     ;;
   ''|-h|--help)
     usage
