@@ -1,0 +1,69 @@
+/home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home
+SCENARIO relaunch spawn direct-PR without exception
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  repair missing watcher supervision according to the session-start block for this harness; do not use shell &.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+error: relaunch refused: project is registered +require-no-mistakes, so every ship task there runs mode=no-mistakes, and this task selected mode=direct-PR without the captain's quoted exception
+error: re-scaffold or add the captain-approved NO-MISTAKES-EXCEPTION: "<quoted words>" line to the brief (--no-mistakes-exception), or move the task and its brief to mode=no-mistakes before relaunching
+exit=1
+Task record, instructions, HEAD, branch, and unfinished work unchanged.
+SCENARIO relaunch control direct-PR without exception
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home
+error: relaunch refused: project is registered +require-no-mistakes, so every ship task there runs mode=no-mistakes, and this task selected mode=direct-PR without the captain's quoted exception
+error: re-scaffold or add the captain-approved NO-MISTAKES-EXCEPTION: "<quoted words>" line to the brief (--no-mistakes-exception), or move the task and its brief to mode=no-mistakes before relaunching
+exit=1
+Task record, instructions, HEAD, branch, and unfinished work unchanged.
+SCENARIO relaunch spawn local-only without exception
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+error: relaunch refused: project is registered +require-no-mistakes, so every ship task there runs mode=no-mistakes, and this task selected mode=local-only without the captain's quoted exception
+error: re-scaffold or add the captain-approved NO-MISTAKES-EXCEPTION: "<quoted words>" line to the brief (--no-mistakes-exception), or move the task and its brief to mode=no-mistakes before relaunching
+exit=1
+Task record, instructions, HEAD, branch, and unfinished work unchanged.
+SCENARIO relaunch control local-only without exception
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home
+error: relaunch refused: project is registered +require-no-mistakes, so every ship task there runs mode=no-mistakes, and this task selected mode=local-only without the captain's quoted exception
+error: re-scaffold or add the captain-approved NO-MISTAKES-EXCEPTION: "<quoted words>" line to the brief (--no-mistakes-exception), or move the task and its brief to mode=no-mistakes before relaunching
+exit=1
+Task record, instructions, HEAD, branch, and unfinished work unchanged.
+SCENARIO fresh spawn direct-PR without exception
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+error: spawn refused for new-direct-PR: project is registered +require-no-mistakes, so every ship task there runs mode=no-mistakes, and this task selected mode=direct-PR without the captain's quoted exception
+error: re-scaffold the brief with --mode no-mistakes and spawn with --mode no-mistakes, or, only when the captain explicitly approved skipping no-mistakes for this one task, re-scaffold it with bin/fm-brief.sh new-direct-PR project --mode direct-PR --no-mistakes-exception '<the captain's quoted words>' and spawn again
+exit=1
+SCENARIO fresh spawn local-only without exception
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+error: spawn refused for new-local-only: project is registered +require-no-mistakes, so every ship task there runs mode=no-mistakes, and this task selected mode=local-only without the captain's quoted exception
+error: re-scaffold the brief with --mode no-mistakes and spawn with --mode no-mistakes, or, only when the captain explicitly approved skipping no-mistakes for this one task, re-scaffold it with bin/fm-brief.sh new-local-only project --mode local-only --no-mistakes-exception '<the captain's quoted words>' and spawn again
+exit=1
+SCENARIO scout promotion without exception
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+error: promotion refused for task: project is registered +require-no-mistakes, so every ship task there runs mode=no-mistakes, and this task selected mode=direct-PR without the captain's quoted exception
+error: promote with --mode no-mistakes, or, only when the captain explicitly approved skipping no-mistakes for this one task, pass --no-mistakes-exception '<the captain's quoted words>'
+exit=1
+SCENARIO scout attempts a real Git push
+fm-git-push-guard: refused: this is a scout task on a project that requires no-mistakes, so it delivers a report and never a pushed branch or PR; write the findings and any recommended change into the report, and firstmate promotes the task if the work should ship
+error: failed to push some refs to '/home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/remote.git'
+exit=1
+fatal: 'refs/heads/scout' - not a valid ref
+Remote has no scout branch.
+SCENARIO guard permits a ship after promotion
+To /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/remote.git
+ * [new branch]      HEAD -> ship
+82c0e3fb79b6d81a669ea3a4092b47118c691522 refs/heads/ship
+SCENARIO promotion with a quoted exception
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+promoted task to ship mode=direct-PR yolo=off (teardown protection restored)
+wrote ship instructions for mode=direct-PR: /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home/data/task/ship-instructions.md
+next: FM_HOME=/home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home bin/fm-send.sh fm-task "$(cat /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/live.zZDNdb/home/data/task/ship-instructions.md)"
+NO-MISTAKES-EXCEPTION: "Ship this one without no-mistakes."
+SCENARIO project policy is opt-in
+on
+off

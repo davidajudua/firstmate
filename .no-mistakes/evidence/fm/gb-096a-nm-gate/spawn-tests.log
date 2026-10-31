@@ -1,0 +1,8 @@
+ok - fm-spawn: a flagged project refuses direct-PR and local-only before launch and launches no-mistakes
+ok - fm-spawn: the captain's quoted exception admits one direct-PR task, and a blank quote does not
+ok - fm-spawn: a project without the token still launches direct-PR
+ok - fm-brief: the exception needs a one-line nonblank quote on a non-no-mistakes ship brief, never from the home include
+ok - fm-spawn: a scout on a flagged project cannot push until it is promoted, and an unflagged scout gets no guard
+not ok - a promotion carrying the quoted exception was refused: WARNING: watcher still down (same stale episode; last beat: 11s ago, grace 300s) - full banner already printed this episode.
+error: promotion refused for nm-p2: this home runs as firstmate user/operator and holds no publication authority for github.com/davidajudua/firstmate
+error: to let this home publish to github.com/davidajudua/firstmate, write 'maintainer github.com/davidajudua/firstmate' into /home/david/.no-mistakes/worktrees/12215e17a012/01M6862RD6XWJQD9QHYMN5TQ9F/.test-tmp/fm-spawn-require-no-mistakes.c6JiKo/promote/home/config/firstmate-role (docs/configuration.md "Firstmate role"), or pass --upstream-consent github.com/davidajudua/firstmate for this one task with the captain's explicit approval

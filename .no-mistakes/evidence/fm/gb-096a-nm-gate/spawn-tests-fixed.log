@@ -1,0 +1,7 @@
+ok - fm-spawn: a flagged project refuses direct-PR and local-only before launch and launches no-mistakes
+ok - fm-spawn: the captain's quoted exception admits one direct-PR task, and a blank quote does not
+ok - fm-spawn: a project without the token still launches direct-PR
+ok - fm-brief: the exception needs a one-line nonblank quote on a non-no-mistakes ship brief, never from the home include
+ok - fm-spawn: a scout on a flagged project cannot push until it is promoted, and an unflagged scout gets no guard
+ok - fm-promote: a flagged project refuses a direct-PR promotion unless it carries the quoted exception
+# all fm-spawn-require-no-mistakes tests passed
